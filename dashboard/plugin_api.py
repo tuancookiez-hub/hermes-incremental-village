@@ -1,4 +1,4 @@
-"""Hermes Village backend routes for the Desktop page, mounted at /api/plugins/hermes-village/.
+"""Hermes Incremental Village backend routes for the Desktop page, mounted at /api/plugins/hermes-village/.
 
 These routes never call a model. Planning a day goes through the /village plan
 command (agent half), which owns ctx.llm and the budget gate.
@@ -50,6 +50,17 @@ async def _run(fn, *args) -> Any:
 @router.get("/state")
 async def state(have: str = "") -> dict:
     return await _run(service.snapshot, have[:64])
+
+
+@router.get("/engine")
+async def engine_status() -> dict:
+    return await _run(service.engine_status)
+
+
+@router.post("/engine")
+async def install_engine(body: dict | None = None) -> dict:
+    """Downloads the pinned engine. Only the player's own button or /village setup comes here."""
+    return await _run(service.install_engine)
 
 
 @router.post("/guide")

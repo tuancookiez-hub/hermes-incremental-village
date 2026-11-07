@@ -1,4 +1,4 @@
-# Hermes Village
+# Hermes Incremental Village
 
 A 3D Stone Age village whose three villagers — Ash, Bryn and Coll — are played by Hermes.
 You are their guide, not their god: you give advice, and they decide what to do.
@@ -68,18 +68,27 @@ and Screen Overlay plugins are planned but not built.
 
 ### Install (local development)
 
-1. Install [Rust](https://rustup.rs), then build the rules engine once from this folder:
-   ```bash
-   cargo install --path engine-rs --locked
-   ```
-   It goes to cargo's own bin folder, so the plugin folder holds no compiled files. Without it the
-   page says what to run; nothing else breaks.
-2. Link or copy this folder to `<HERMES_HOME>/plugins/hermes-village`.
-3. Run `hermes plugins enable hermes-village`, then restart the gateway so the backend routes mount.
-4. In Desktop, turn on the plugin under **Capabilities → Plugins**.
+1. Link or copy this folder to `<HERMES_HOME>/plugins/hermes-village`.
+2. Run `hermes plugins enable hermes-village`, then restart the gateway so the backend routes mount.
+3. In Desktop, turn on the plugin under **Capabilities → Plugins**.
+4. Open the page and press **Download engine**, or run `/village setup` in chat. This fetches the
+   rules engine for your computer once. You do not need Rust.
 
-Run that install command again after pulling a new version. The plugin checks the engine's version,
-rules and protocol when it starts it, and refuses a mismatch with a message saying so.
+Prefer to build it yourself? With [Rust](https://rustup.rs) installed, run this from this folder:
+```bash
+cargo install --path engine-rs --locked
+```
+The plugin checks the engine's version, rules and protocol when it starts it, and refuses a mismatch
+with a message saying so. A new plugin version asks for its matching engine the same way.
+
+### Releasing the engine
+
+Set the version in `plugin.yaml`, `dashboard/manifest.json`, `engine-rs/Cargo.toml`,
+`village/bridge.py` and `village/engine-release.json`, commit, and push a tag such as `v0.10.0`.
+`.github/workflows/engine.yml` builds Windows, Linux and macOS, tests each one against the frozen
+Python engine, attests the builds and publishes them on the release. Then run
+`python scripts/pin_engine.py`, which verifies each attestation and records its checksum, and commit
+the result. The plugin only ever downloads a file whose checksum is pinned there.
 
 ### Rebuilding the Desktop page
 
@@ -89,6 +98,13 @@ cd web && npm ci && npm run build && npm run check
 
 The build writes `desktop/plugin.js`: one unminified ES module that contains three.js r187.
 Its only imports are `@hermes/plugin-sdk`, `react` and `react/jsx-runtime`.
+
+### Getting around
+
+Drag to turn the view, scroll to zoom, and click a villager to follow them. The map in the corner shows
+everything they have seen; click it to look there. Space pauses, 1 to 5 set the speed, C goes to camp,
+F follows the group and Esc closes what is open. Sound is off until you turn it on in Settings, and it is
+made in the page, so nothing is downloaded.
 
 ## Costs, data, network and background work
 
@@ -102,7 +118,7 @@ Its only imports are `@hermes/plugin-sdk`, `react` and `react/jsx-runtime`.
 - **Hermes does not report dollar cost to plugins** in this version (`usage.cost_usd` is not
   filled in), so the budget is counted in tokens.
 - **One child process, no background work or spending.** The rules run in
-  `hermes-village-engine`, a Rust program built from `engine-rs/`. Hermes starts one copy per
+  `hermes-village-engine`, a Rust program whose source is in `engine-rs/`. Hermes starts one copy per
   process that uses the plugin, the first time it is needed, and talks to it over stdin and stdout.
   It listens on no port, opens no network connection, reads and writes no files, and exits when
   Hermes does. It only answers requests, so it does nothing while idle. The plugin starts no
@@ -112,11 +128,16 @@ Its only imports are `@hermes/plugin-sdk`, `react` and `react/jsx-runtime`.
   refused inside a cron run. The Desktop page re-reads the state every 5 seconds, and when a
   day ends, only while it is open and visible; those reads are free.
 - **Network.** None while playing, apart from the model calls Hermes makes for a council through
-  your configured provider. There are no remote assets or scripts, and no telemetry. Building the
-  engine downloads its Rust crates (serde, serde_json, sha2 and their dependencies) from crates.io,
-  pinned by `engine-rs/Cargo.lock`.
+  your configured provider. There are no remote assets or scripts, and no telemetry. There is one
+  download, and only when you press **Download engine** or run `/village setup`: the engine for your
+  computer, about 1 MB, from this plugin's GitHub releases. It is checked against a checksum pinned
+  in `village/engine-release.json` and thrown away if it does not match. It is stored at
+  `<HERMES_HOME>/plugin-data/hermes-village/engine/`. Building from source instead downloads the
+  Rust crates (serde, serde_json, sha2 and their dependencies) from crates.io, pinned by
+  `engine-rs/Cargo.lock`.
 - **Data.** The village save and the token ledger live in Hermes plugin storage at
-  `<HERMES_HOME>/plugin-data/hermes-village/data.db` (SQLite). Python owns storage: the engine is
+  `<HERMES_HOME>/plugin-data/hermes-village/data.db` (SQLite), along with the village's written
+  history. Your welcome, look and sound choices stay in this browser. Python owns storage: the engine is
   handed the world and hands it back. The plugin reads no files outside that folder and never
   touches credentials.
 - **What the model sees.** Only the game rules, the villagers' local views, memories and what

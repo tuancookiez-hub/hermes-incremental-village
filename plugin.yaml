@@ -1,13 +1,16 @@
 name: hermes-village
 version: 0.10.0
 description: >-
-  A 3D Stone Age village on endless generated land, whose villagers are played by Hermes.
+  Hermes Incremental Village: a 3D Stone Age village on endless generated land, whose villagers are played by Hermes.
   It starts with three, and they can die. Each villager sees only nearby tiles and plans its own day; the
   game validates every action and owns time and resources. Model calls happen only
   when you ask for a council (one batched call each) and stop at a daily token budget
   you set. Days you miss are worked out for free when you return. The rules run in a small
-  Rust program you build once with cargo; Hermes starts it as a child process over a pipe. It
-  has no network access, writes no files, and only works when asked.
+  Rust program that Hermes starts as a child process over a pipe; it has no network access, writes
+  no files, and only works when asked. You get it once, by pressing the button on the page or
+  running /village setup, which downloads about 1 MB from this plugin's GitHub releases and checks
+  it against a pinned checksum. Nothing is downloaded unless you ask. You can build it from source
+  with cargo instead.
 author: tuancookiez
 license: MIT
 requires_hermes: ">=0.22.7"

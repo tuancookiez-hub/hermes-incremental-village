@@ -17,7 +17,7 @@ const BUILD_SPOT = new Vector2(0.5, 0.4) // where a builder stands relative to t
 const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a))
 const trunc = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 
-export function createScene(container) {
+export function createScene(container, { onPick } = {}) {
   const renderer = new WebGLRenderer({ antialias: false, alpha: false, powerPreference: 'high-performance' })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75))
   renderer.domElement.style.display = 'block'
@@ -417,13 +417,23 @@ export function createScene(container) {
   function select(name) {
     selected = name && villagers.has(name) ? name : null
     following = !!selected
+    glide = null
     if (!selected) watching = true
   }
   function watch() {
+    glide = null
     following = !!selected
     watching = true
   }
-  const onCtrlStart = () => { following = false; watching = false }
+  // a tile to glide to, from the map or the camp button; dragging cancels it
+  let glide = null
+  function lookAt(x, y) {
+    following = false
+    watching = false
+    glide = { x: wx(x), z: wz(y) }
+  }
+  const lookingAt = () => ({ x: Math.round(controls.target.x - 0.5), y: Math.round(controls.target.z - 0.5) })
+  const onCtrlStart = () => { following = false; watching = false; glide = null }
   controls.addEventListener('start', onCtrlStart)
 
   // ---- hover picking
@@ -439,8 +449,20 @@ export function createScene(container) {
     hovered = o?.userData.name ?? null
   }
   const onLeave = () => { hovered = null }
+  // a press that does not drag is a click: it picks whoever is under it
+  let press = null
+  const onDown = e => { press = { x: e.clientX, y: e.clientY } }
+  const onUp = e => {
+    if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 6) {
+      onMove(e)
+      if (hovered) onPick?.(hovered)
+    }
+    press = null
+  }
   renderer.domElement.addEventListener('pointermove', onMove)
   renderer.domElement.addEventListener('pointerleave', onLeave)
+  renderer.domElement.addEventListener('pointerdown', onDown)
+  renderer.domElement.addEventListener('pointerup', onUp)
 
   // ---- sizing
   const resize = () => {
@@ -692,7 +714,14 @@ export function createScene(container) {
       }
     }
 
-    if (following && selected && villagers.has(selected)) {
+    if (glide) {
+      goal.set(glide.x, 0.4, glide.z)
+      delta.copy(goal).sub(controls.target)
+      if (delta.length() < 0.05) glide = null
+      delta.multiplyScalar(1 - Math.exp(-dt * 5))
+      controls.target.add(delta)
+      camera.position.add(delta)
+    } else if (following && selected && villagers.has(selected)) {
       const p = villagers.get(selected).pos
       goal.set(p.x, 0.4, p.z)
       delta.copy(goal).sub(controls.target).multiplyScalar(1 - Math.exp(-dt * 5))
@@ -726,6 +755,8 @@ export function createScene(container) {
 
   return {
     watch,
+    lookAt,
+    lookingAt,
     update,
     setPlayback,
     select,
@@ -737,6 +768,8 @@ export function createScene(container) {
       document.removeEventListener('visibilitychange', onVis)
       renderer.domElement.removeEventListener('pointermove', onMove)
       renderer.domElement.removeEventListener('pointerleave', onLeave)
+      renderer.domElement.removeEventListener('pointerdown', onDown)
+      renderer.domElement.removeEventListener('pointerup', onUp)
       controls.removeEventListener('start', onCtrlStart)
       for (const f of floats) disposeSprite(f.s)
       floats.length = 0

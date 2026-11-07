@@ -1,4 +1,4 @@
-"""Hermes Village: a 3D Stone Age village whose villagers are played by Hermes.
+"""Hermes Incremental Village: a 3D Stone Age village whose villagers are played by Hermes.
 
 Agent half. Registers the village tools, the /village command and a dedicated
 auxiliary model slot ("Village planner") so the player can point council calls
@@ -22,7 +22,7 @@ _EMPTY = {"type": "object", "properties": {}, "additionalProperties": False}
 SCHEMAS = {
     "village_status": {
         "name": "village_status",
-        "description": "Show the Hermes Village: day, era, Insight, Trust, buildings, the villagers (position, "
+        "description": "Show the Hermes Incremental Village: day, era, Insight, Trust, buildings, the villagers (position, "
                        "health, energy, skills, inventory), the player's guidance and today's model-token budget. Free.",
         "parameters": _EMPTY,
     },
@@ -63,7 +63,7 @@ def register(ctx) -> None:
     ctx.register_auxiliary_task(
         service.AUX_TASK,
         display_name="Village planner",
-        description="Hermes Village councils: one batched call plans all villagers' day.",
+        description="Hermes Incremental Village councils: one batched call plans all villagers' day.",
     )
 
     def status(args: dict, **kwargs) -> str:
@@ -93,7 +93,7 @@ def register(ctx) -> None:
 
     def plan(args: dict, **kwargs) -> str:
         if _in_cron(ctx):
-            return _json({"ok": False, "error": "Hermes Village never spends model tokens in scheduled runs."})
+            return _json({"ok": False, "error": "Hermes Incremental Village never spends model tokens in scheduled runs."})
         try:
             out = service.plan_day(_store, ctx.llm)
             return _json({"ok": True, "plans": service.format_plans(out["plans"]), "usage": out["usage"],
@@ -115,7 +115,7 @@ def register(ctx) -> None:
         try:
             if sub == "plan":
                 if _in_cron(ctx):
-                    return "Hermes Village never spends model tokens in scheduled runs."
+                    return "Hermes Incremental Village never spends model tokens in scheduled runs."
                 out = service.plan_day(_store, ctx.llm, purpose="village.plan_day.command")
                 u = out["usage"]
                 b = out["budget"]
@@ -133,6 +133,9 @@ def register(ctx) -> None:
                     return service.format_status(service.snapshot(_store))
                 snap = service.set_budget(_store, rest.replace(",", "").replace("_", ""))
                 return f"Daily village budget set to {snap['budget']['daily_tokens']:,} tokens."
+            if sub == "setup":
+                state = service.install_engine(_store)
+                return f"Village engine {state['version']} installed. Open the Village page to play."
             if sub == "status":
                 return service.format_status(service.snapshot(_store))
             if sub == "ideas":
@@ -149,9 +152,12 @@ def register(ctx) -> None:
             if sub == "focus":
                 return service.format_ideas(service.focus(_store, rest.strip().lower() or None))
             return ("Usage: /village [status | plan | habit | guide <advice> | budget [tokens] | ideas | "
-                    "plant <idea> | upgrade <name> | focus <food|shelter|explore|learn> | speed <pause|1|2|4|8|16>]\n"
-                    "plan holds a council (one model call, counts against the daily budget); everything else is free.")
+                    "plant <idea> | upgrade <name> | focus <food|shelter|explore|learn> | speed <pause|1|2|4|8|16> | setup]\n"
+                    "plan holds a council (one model call, counts against the daily budget); setup downloads the "
+                    "rules engine once, from this plugin's GitHub releases; everything else is free.")
         except service.VillageError as exc:
+            return f"Village: {exc}"
+        except service.engine.EngineUnavailable as exc:
             return f"Village: {exc}"
         except ValueError:
             return "Village: speed must be pause, 1, 2, 4, 8 or 16."
@@ -159,6 +165,6 @@ def register(ctx) -> None:
     ctx.register_command(
         name="village",
         handler=command,
-        description="Hermes Village: status, plan (model council), habit (free day), guide, budget, ideas, plant, upgrade, focus, speed.",
-        args_hint="[status|plan|habit|guide <advice>|budget [tokens]|ideas|plant <idea>|upgrade <name>|focus <kind>|speed <value>]",
+        description="Hermes Incremental Village: status, plan (model council), habit (free day), guide, budget, ideas, plant, upgrade, focus, speed, setup (download the engine).",
+        args_hint="[status|plan|habit|guide <advice>|budget [tokens]|ideas|plant <idea>|upgrade <name>|focus <kind>|speed <value>|setup]",
     )

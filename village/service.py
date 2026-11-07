@@ -9,7 +9,7 @@ import sys
 import time
 from typing import Any
 
-from . import engine, planner
+from . import bridge, engine, fetch, planner
 from .store import PLUGIN_ID, Store
 
 log = logging.getLogger(__name__)
@@ -22,6 +22,19 @@ AUX_TASK = "village_planner"
 
 class VillageError(Exception):
     """A refusal the player should read (budget, lock, bad input)."""
+
+
+def engine_status(store: Store) -> dict:
+    return fetch.status(bridge.ENGINE_VERSION)
+
+
+def install_engine(store: Store) -> dict:
+    """Only ever called because the player asked. Downloads the pinned engine for this computer."""
+    try:
+        fetch.install(bridge.ENGINE_VERSION)
+    except fetch.FetchError as exc:
+        raise VillageError(str(exc)) from None
+    return engine_status(store)
 
 
 def _notify(day: int) -> None:
@@ -44,6 +57,55 @@ def clock() -> float:
 def _legacy(store: Store, db) -> dict:
     """Legacy outlives any one village, so it is kept beside the save, not inside it."""
     return store.get_setting(db, "legacy", None) or {"points": 0, "perks": [], "villages": []}
+
+
+# What gets written down in the village's history, out of everything a day reports.
+_WORTH_TELLING = ("died of", "has fallen", "looking for a home", "came through the winter", "has begun",
+                  "noticed seeds", "worked out", "The fire went out")
+_CHRONICLE_LINES = 200
+
+
+def _building_name(kind: str) -> str:
+    return "lean-to" if kind == "lean_to" else kind.replace("_", " ")
+
+
+def _chronicle(store: Store, db, world: dict) -> dict:
+    """The story of this village, kept beside the save because the day log only holds the last
+    few days. Deaths and first buildings come from the save itself, so days caught up while nobody
+    was looking still make it in."""
+    book = store.get_setting(db, "chronicle", None)
+    if not book or book.get("village") != world["seed"]:
+        names = [v["name"] for v in world["villagers"]]
+        people = f"{', '.join(names[:-1])} and {names[-1]}" if len(names) > 1 else "".join(names)
+        book = {"village": world["seed"], "upto": 0, "lines": [{"day": 1, "text": f"{people} made camp."}], "firsts": [], "seen": {}}
+    if world["day"] == book["upto"]:
+        return book
+    told = {(n["day"], n["text"]) for n in book["lines"]}
+
+    def tell(day: int, text: str) -> None:
+        if (day, text) not in told:
+            told.add((day, text))
+            book["lines"].append({"day": day, "text": text})
+
+    for report in world["log"]:
+        for event in report.get("events", ()):
+            if any(mark in event for mark in _WORTH_TELLING):
+                tell(report["day"], event if event.endswith(".") else f"{event}.")
+    for grave in world["dead"]:
+        tell(grave["day"], f"{grave['name']} died of {grave['cause']}.")
+    for building in world["built"]:
+        if building["kind"] not in book["firsts"] and "day" in building:
+            book["firsts"].append(building["kind"])
+            who = f"{building['by']} built" if building.get("by") else "They built"
+            tell(building["day"], f"{who} the first {_building_name(building['kind'])}.")
+    for villager in world["villagers"]:  # the dead take what they saw with them, so it is noted here
+        for chunk, bits in villager["seen"].items():
+            book["seen"][chunk] = f"{int(bits, 16) | int(book['seen'].get(chunk, '0'), 16):064x}"
+    book["lines"].sort(key=lambda n: n["day"])
+    book["lines"] = book["lines"][-_CHRONICLE_LINES:]
+    book["upto"] = world["day"]
+    store.set_setting(db, "chronicle", book)
+    return book
 
 
 def _world(store: Store, db) -> dict:
@@ -81,7 +143,16 @@ def snapshot(store: Store, have: str = "") -> dict:
     with store.tx() as db:
         world = _world(store, db)
         legacy = _legacy(store, db)
-        return {"world": engine.public_state(world, clock(), have), "budget": _budget(store, db, world),
+        book = _chronicle(store, db, world)
+        state = engine.public_state(world, clock(), have)
+        if world["fallen"] and world["dead"]:
+            # With nobody left alive there is nobody to see the land, but the village's end should
+            # still happen somewhere. The last to die stands in, knowing all that was ever seen.
+            witness = {**world, "villagers": [{**world["dead"][-1], "seen": book["seen"]}]}
+            state["resources"] = engine.resources(witness)
+            if "land_view" in state:
+                state["land_view"] = engine.land_view(witness)
+        return {"world": state, "budget": _budget(store, db, world), "chronicle": book["lines"],
                 "legacy": {**legacy, "perks_for_sale": engine.PERKS, "would_earn": engine.legacy_earned(world)}}
 
 
@@ -128,14 +199,15 @@ def reset(store: Store, seed: Any = None) -> dict:
         world.pop("_dirty", None)
         store.save_world(db, world)
         store.set_setting(db, "planning_since", 0)
+        store.set_setting(db, "chronicle", None)  # the same seed can come back, and its story is new
     _notify(world["day"])
     return snapshot(store)
 
 
-def _guide_action(store: Store, act) -> dict:
+def _guide_action(store: Store, act, after_the_end: bool = False) -> dict:
     with store.tx() as db:
         world = _world(store, db)
-        if world["fallen"]:
+        if world["fallen"] and not after_the_end:
             raise_after = f"the village fell on day {world['fallen']}; start a new one"
         else:
             raise_after = act(world)
@@ -160,7 +232,9 @@ def focus(store: Store, name: Any) -> dict:
 
 
 def speed(store: Store, value: Any) -> dict:
-    return _guide_action(store, lambda w: engine.set_speed(w, value, clock()))
+    # The last day still plays out on the page, so the clock must keep working: a pause on that day
+    # would otherwise never lift, and the village's end would never be shown.
+    return _guide_action(store, lambda w: engine.set_speed(w, value, clock()), after_the_end=True)
 
 
 def buy_perk(store: Store, perk: Any) -> dict:

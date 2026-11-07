@@ -1226,3 +1226,57 @@ def test_budget_validation(store):
         service.set_budget(store, "lots")
     with pytest.raises(service.VillageError):
         service.set_budget(store, -1)
+
+
+def fall(store):
+    """Bring everyone to one bad night and let the day run."""
+    service.snapshot(store)
+    with store.tx() as db:
+        w = store.load_world(db)
+        for v in w["villagers"]:
+            v["health"], v["inv"] = 1, {}
+        store.save_world(db, w)
+    with store.tx() as db:
+        w = store.load_world(db)
+        engine.run_day(w, {v["name"]: {"actions": []} for v in w["villagers"]}, source="model")
+        store.save_world(db, w)
+    return w
+
+
+def test_the_last_day_can_still_be_paused_and_resumed(store):
+    assert fall(store)["fallen"]
+    assert service.speed(store, 0)["world"]["paused_at"] is not None
+    assert service.speed(store, 4)["world"]["paused_at"] is None
+    with pytest.raises(service.VillageError):
+        service.focus(store, "food")
+
+
+def test_a_fallen_village_keeps_its_land_on_screen(store):
+    alive = service.snapshot(store)["world"]["land_view"]
+    fall(store)
+    gone = service.snapshot(store)["world"]
+    assert not gone["villagers"] or all(v.get("dying") for v in gone["villagers"])
+    assert set(alive["seen"]) <= set(gone["land_view"]["seen"])
+    assert any("1" in bits for bits in gone["land_view"]["seen"].values())
+
+
+def test_the_chronicle_tells_the_story_and_starts_over_with_the_village(store):
+    first = service.snapshot(store)["chronicle"]
+    assert first == [{"day": 1, "text": "Ash, Bryn and Coll made camp."}]
+    fall(store)
+    told = [n["text"] for n in service.snapshot(store)["chronicle"]]
+    assert "Ash died of " in " ".join(told) and "The village has fallen." in told
+    assert len(told) == len(set(told))
+    assert len(service.reset(store)["chronicle"]) == 1
+
+
+def test_the_chronicle_notes_a_first_building_once(store):
+    service.snapshot(store)
+    with store.tx() as db:
+        w = store.load_world(db)
+        w["built"] += [{"kind": "lean_to", "x": 12, "y": 12, "by": "Ash", "day": w["day"]},
+                       {"kind": "lean_to", "x": 13, "y": 12, "by": "Bryn", "day": w["day"]}]
+        engine.run_day(w, {}, source="habit")
+        store.save_world(db, w)
+    told = [n["text"] for n in service.snapshot(store)["chronicle"]]
+    assert told.count("Ash built the first lean-to.") == 1 and not any("Bryn built" in t for t in told)

@@ -2,7 +2,7 @@
 name = "hermes-village-engine"
 version = "0.10.0"
 edition = "2021"
-description = "Deterministic rules engine for the Hermes Village plugin (exact port of village/engine.py)"
+description = "Deterministic rules engine for the Hermes Incremental Village plugin (exact port of village/engine.py)"
 license = "MIT"
 publish = false
 

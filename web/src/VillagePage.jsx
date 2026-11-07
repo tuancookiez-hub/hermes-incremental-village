@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { makeApi, errText, fmtTokens } from './api.js'
 import { createScene } from './scene.js'
 import { SKIN_CSS } from './skins.js'
+import { createMinimap, MINIMAP_SIZE } from './minimap.js'
+import { createSound } from './sound.js'
 import { poseAt, idlePose, describePose, feedAt, clockAt } from './playback.js'
 
 const { host } = sdk
@@ -12,7 +14,8 @@ const C = {
   glass: 'rgba(14, 16, 20, 0.86)', solid: '#111317', raised: 'rgba(255, 255, 255, 0.06)', line: 'rgba(255, 255, 255, 0.09)',
   text: '#ece9e2', mid: 'var(--hv-mid, #a9a69e)', low: 'var(--hv-low, #74726b)', gold: '#e6b450', red: '#e8695a', green: '#86c172'
 }
-const glass = { background: C.glass, backdropFilter: 'blur(10px)', border: `1px solid ${C.line}`, borderRadius: 10 }
+const line = { borderWidth: 1, borderStyle: 'solid', borderColor: C.line }
+const glass = { background: C.glass, backdropFilter: 'blur(10px)', ...line, borderRadius: 10 }
 const TOP = 46
 const DOCK = 130
 const RAIL = 62
@@ -27,25 +30,28 @@ const S = {
   drawerBody: { flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 12px 12px', display: 'flex', flexDirection: 'column', gap: 10 },
   dock: { ...glass, position: 'absolute', left: 8, right: 8, bottom: 8, height: DOCK, boxSizing: 'border-box', padding: 8, display: 'flex', flexDirection: 'column', gap: 8 },
   people: { display: 'flex', gap: 6, flex: 1, minHeight: 0 },
-  person: { flex: '1 1 0', minWidth: 0, background: C.raised, border: `1px solid ${C.line}`, borderRadius: 8, padding: '5px 8px', color: C.text, font: 'inherit', textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 1 },
+  person: { flex: '1 1 0', minWidth: 0, background: C.raised, ...line, borderRadius: 8, padding: '5px 8px', color: C.text, font: 'inherit', textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 1 },
   bar: { display: 'flex', alignItems: 'center', gap: 6 },
   clip: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   h: { fontSize: 11, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', color: C.low },
   mid: { color: C.mid },
   low: { color: C.low, fontSize: 12 },
   row: { display: 'flex', gap: 8, alignItems: 'center' },
-  stock: { ...glass, position: 'absolute', top: TOP + 16, left: 8, boxSizing: 'border-box', padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 1 },
-  feed: { position: 'absolute', top: TOP + 116, left: 12, width: 'min(320px, 45%)', display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, textShadow: '0 1px 3px rgba(0,0,0,0.9)', pointerEvents: 'none' },
+  left: { position: 'absolute', top: TOP + 16, left: 8, width: 'min(320px, 45%)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, pointerEvents: 'none' },
+  stock: { ...glass, boxSizing: 'border-box', padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 1, pointerEvents: 'auto' },
+  feed: { paddingLeft: 4, display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, textShadow: '0 1px 3px rgba(0,0,0,0.9)' },
+  mini: { ...glass, position: 'absolute', right: 8, bottom: DOCK + 16, padding: 4, lineHeight: 0, overflow: 'hidden' },
+  welcome: { ...glass, position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 'min(440px, 80%)', maxHeight: 'calc(100% - 40px)', overflowY: 'auto', boxSizing: 'border-box', padding: 18, display: 'flex', flexDirection: 'column', gap: 10, borderColor: C.gold },
   card: { ...glass, position: 'absolute', left: 8, bottom: DOCK + 16, width: 300, maxWidth: 'calc(100% - 100px)', boxSizing: 'border-box', padding: 12, display: 'flex', flexDirection: 'column', gap: 6 },
   notice: { ...glass, position: 'absolute', top: TOP + 16, left: '50%', transform: 'translateX(-50%)', width: 'min(380px, 60%)', boxSizing: 'border-box', padding: 12, display: 'flex', flexDirection: 'column', gap: 8, borderColor: C.gold },
-  input: { width: '100%', boxSizing: 'border-box', background: C.raised, color: C.text, border: `1px solid ${C.line}`, borderRadius: 8, padding: '6px 8px', font: 'inherit', resize: 'none' }
+  input: { width: '100%', boxSizing: 'border-box', background: C.raised, color: C.text, ...line, borderRadius: 8, padding: '6px 8px', font: 'inherit', resize: 'none' }
 }
 
-function Btn({ primary, on, style, ...props }) {
+function Btn({ primary, on, style, className = '', ...props }) {
   const look = primary ? { background: C.gold, color: '#1a1408', borderColor: C.gold, fontWeight: 600 }
     : on ? { background: 'rgba(230, 180, 80, 0.18)', color: C.gold, borderColor: C.gold } : { background: C.raised, color: C.text, borderColor: C.line }
   return (
-    <button type="button" {...props} className={`hv-btn${primary ? ' hv-primary' : ''}`} data-on={on ? 'true' : undefined} style={{ font: 'inherit', fontSize: 12, border: '1px solid', borderRadius: 7, padding: '5px 10px', whiteSpace: 'nowrap', cursor: props.disabled ? 'default' : 'pointer', opacity: props.disabled ? 0.4 : 1, ...look, ...style }} />
+    <button type="button" {...props} className={`hv-btn${primary ? ' hv-primary' : ''} ${className}`} data-on={on ? 'true' : undefined} style={{ font: 'inherit', fontSize: 12, borderWidth: 1, borderStyle: 'solid', borderRadius: 7, padding: '5px 10px', whiteSpace: 'nowrap', cursor: props.disabled ? 'default' : 'pointer', opacity: props.disabled ? 0.4 : 1, ...look, ...style }} />
   )
 }
 
@@ -185,18 +191,32 @@ function BuildTab({ buildings, built }) {
   })
 }
 
+function StoryTab({ story, log }) {
+  return (
+    <>
+      {(story ?? []).map((n, i) => (
+        <div key={`${n.day}-${i}`} style={{ display: 'flex', gap: 8 }}>
+          <span style={{ ...S.low, flex: '0 0 44px' }}>Day {n.day}</span>
+          <span style={{ color: DARK.test(n.text) ? C.red : C.text }}>{n.text}</span>
+        </div>
+      ))}
+      {log?.length > 0 && <div style={{ ...S.h, marginTop: 6 }}>Recent days</div>}
+      <LogTab log={log} />
+    </>
+  )
+}
+
 function LogTab({ log }) {
-  if (!log?.length) return <div style={S.low}>No days recorded yet.</div>
-  return [...log].reverse().map((d, i) => (
+  return [...(log ?? [])].reverse().map((d, i) => (
     <details key={`${d.day}-${i}`}>
       <summary style={{ cursor: 'pointer' }}>Day {d.day} <span style={S.low}>{d.source === 'model' ? 'council' : 'free day'}{d.rejected ? ` · ${d.rejected} failed` : ''}</span></summary>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '4px 0 0 8px' }}>
-        {(d.events ?? []).map(e => <div key={e}><strong>{e}</strong></div>)}
+        {(d.events ?? []).map(e => <div key={e}><strong>{plain(e)}</strong></div>)}
         {(d.villagers ?? []).map(vl => (
           <div key={vl.name}>
             <strong>{vl.name}</strong>
             {vl.thought && <div style={{ ...S.mid, fontStyle: 'italic' }}>"{vl.thought}"</div>}
-            {(vl.steps ?? []).map((st, j) => <div key={j} style={st.ok ? S.mid : S.low}>{st.ok ? '✓' : '✗'} {st.result ?? st.action?.verb}</div>)}
+            {(vl.steps ?? []).map((st, j) => <div key={j} style={st.ok ? S.mid : S.low}>{st.ok ? '✓' : '✗'} {plain(st.result ?? st.action?.verb)}</div>)}
           </div>
         ))}
       </div>
@@ -204,12 +224,42 @@ function LogTab({ log }) {
   ))
 }
 
+const DARK = /died of|has fallen|fire went out/
+const plain = text => String(text ?? '').replace(/lean_to/g, 'lean-to').replace(/_/g, ' ')
+
+// The rules speak in tiles. Nobody playing thinks in coordinates, so a walk is told by where it ends.
+function feedText(text, camp) {
+  const walk = /^walked to \((-?\d+),(-?\d+)\)/.exec(text ?? '')
+  if (!walk || !camp) return plain(text).replace(/ (of|at|near) \(-?\d+,-?\d+\)/g, '')
+  const dx = Number(walk[1]) - camp[0]
+  const dy = Number(walk[2]) - camp[1]
+  const far = Math.round(Math.hypot(dx, dy))
+  if (far <= 3) return 'walked back to camp'
+  const side = (Math.abs(dy) > Math.abs(dx) * 2 ? '' : dx > 0 ? 'east' : 'west')
+  const facing = (Math.abs(dx) > Math.abs(dy) * 2 ? '' : dy > 0 ? 'south' : 'north') + side
+  return `walked ${far} tiles ${facing || side} of camp`
+}
+
+// How long until the year turns against them, worked out from the calendar the page already has.
+function outlook(world) {
+  const days = world.season_days
+  if (!days || !world.day) return null
+  const year = days * 4
+  const today = (world.day - 1) % year
+  const winter = days * 3
+  if (today >= winter) { const left = year - today; return { text: `Winter: ${left} ${left === 1 ? 'day' : 'days'} to go`, bad: true } }
+  const until = winter - today
+  return { text: `Winter in ${until} ${until === 1 ? 'day' : 'days'}`, bad: until <= days }
+}
+
 function fmtItems(o) {
   return Object.entries(o ?? {}).filter(([, n]) => n > 0).map(([k, n]) => `+${n} ${k}`).join(', ')
 }
 
-function Resources({ res, people }) {
+function Resources({ res, people, world }) {
   if (!res) return null
+  const ahead = outlook(world)
+  const meals = people > 0 ? Math.floor(res.held.food / people) : 0
   const herds = {}
   for (const h of res.herds ?? []) herds[h.kind] = (herds[h.kind] ?? 0) + h.count
   const animals = Object.entries(herds).map(([k, n]) => `${n} ${k}`).join(', ')
@@ -230,13 +280,55 @@ function Resources({ res, people }) {
       ))}
       <div style={{ ...S.low, whiteSpace: 'nowrap' }}>{animals ? `Seen: ${animals}` : 'No animals found'}</div>
       {res.fire_out && <div style={{ color: C.red, fontSize: 12 }}>The fire is out</div>}
+      {ahead && <div style={{ fontSize: 12, marginTop: 3, color: ahead.bad ? C.gold : C.mid, whiteSpace: 'nowrap' }}>{ahead.text}</div>}
+      <div style={{ fontSize: 12, color: meals < 2 ? C.red : C.mid, whiteSpace: 'nowrap' }} title="Food held, divided by everyone alive">Food lasts {meals} {meals === 1 ? 'day' : 'days'}</div>
     </div>
   )
 }
 
-const TABS = [['ideas', '✦', 'Ideas'], ['upgrades', '▲', 'Upgrades'], ['legacy', '◆', 'Legacy'], ['build', '⌂', 'Build'], ['speak', '✎', 'Speak'], ['log', '≡', 'Log'], ['settings', '⚙', 'Settings']]
+const TABS = [['ideas', '✦', 'Ideas'], ['upgrades', '▲', 'Upgrades'], ['legacy', '◆', 'Legacy'], ['build', '⌂', 'Build'], ['speak', '✎', 'Speak'], ['story', '≡', 'Story'], ['settings', '⚙', 'Settings']]
 
 const SKINS = [['ps1', 'PS1 blue'], ['wood', 'RPG wood']]
+
+function remembered(key) {
+  try { return localStorage.getItem(key) } catch { return null }
+}
+
+function remember(key, value) {
+  try { localStorage.setItem(key, value) } catch { /* it just won't be remembered */ }
+}
+
+function Welcome({ onBegin }) {
+  return (
+    <div className="hv-panel" style={S.welcome}>
+      <strong style={{ fontSize: 17 }}>You are not their god.</strong>
+      <div>Ash, Bryn and Coll are three people at the start of history. Hermes plays them: they think, argue and decide for themselves. You can only guide.</div>
+      <div style={S.mid}><strong style={{ color: C.text }}>Focus</strong> urges them on free days, if they trust you.</div>
+      <div style={S.mid}><strong style={{ color: C.text }}>Ideas</strong> cost Insight and plant a thought. They still have to work it out.</div>
+      <div style={S.mid}><strong style={{ color: C.text }}>Hold council</strong> makes one model call: they plan tomorrow themselves and you see what they chose.</div>
+      <div style={S.mid}>Everything is limited and winter kills. The land has no edge and starts dark, so what they need next is always further away.</div>
+      <div><Btn primary onClick={onBegin}>Begin</Btn></div>
+    </div>
+  )
+}
+
+function EngineSetup({ setup, busy, onInstall }) {
+  const mb = setup.size ? `${Math.max(0.1, setup.size / 1048576).toFixed(1)} MB` : ''
+  return (
+    <div className="hv-panel" style={S.welcome}>
+      <strong style={{ fontSize: 17 }}>One thing first</strong>
+      <div>The village's rules run in a small engine that needs to be on this computer. It is only fetched when you press this.</div>
+      {setup.available ? (
+        <>
+          <div style={S.low}>{mb} from {setup.url?.split('/').slice(3, 5).join('/')} on GitHub, built from this plugin's public source and checked against a checksum pinned in the plugin.</div>
+          <div><Btn primary disabled={busy} onClick={onInstall}>{busy ? 'Downloading…' : `Download engine · ${mb}`}</Btn></div>
+        </>
+      ) : (
+        <div style={S.mid}>No build is published for this computer yet. With Rust installed, run <code>cargo install --path engine-rs --locked</code> in the plugin folder, then come back here.</div>
+      )}
+    </div>
+  )
+}
 
 function savedSkin() {
   try {
@@ -261,6 +353,15 @@ export function VillagePage({ ctx, skin: startSkin }) {
   const boxRef = useRef(null)
   const sceneRef = useRef(null)
   const [legacy, setLegacy] = useState(null)
+  const [story, setStory] = useState([])
+  const [setup, setSetup] = useState(null)
+  const [welcome, setWelcome] = useState(() => !remembered('hermes-village.welcomed'))
+  const [sound, setSound] = useState(() => remembered('hermes-village.sound') === 'on')
+  const soundRef = useRef(null)
+  const miniCanvas = useRef(null)
+  const miniRef = useRef(null)
+  const selectedRef = useRef(null)
+  const cued = useRef('')
   const [tab, setTab] = useState(null)
   const [skin, setSkin] = useState(() => startSkin ?? savedSkin())
   const chooseSkin = key => {
@@ -293,6 +394,17 @@ export function VillagePage({ ctx, skin: startSkin }) {
     const next = { dayT: Math.round(clock.dayT * 500) / 500, phase: clock.phase, evening: clock.evening, villagers, feed: feedAt(w, clock.slot, 6) }
     const sig = JSON.stringify(next)
     if (sig !== liveSig.current) { liveSig.current = sig; setLive(next) }
+    miniRef.current?.draw(w, villagers, sceneRef.current?.lookingAt(), selectedRef.current)
+    soundRef.current?.tick({ phase: clock.phase, season: w.season, paused: !!w.paused_at })
+    if (clock.evening) { // the bell goes when the day's report is read out, not when the day was worked out
+      const said = (w.current?.events ?? []).join('|')
+      const mark = `${w.day}:${said}`
+      if (mark !== cued.current) {
+        cued.current = mark
+        if (/died of/.test(said)) soundRef.current?.cue('death')
+        else if (/worked out|has begun/.test(said)) soundRef.current?.cue('learn')
+      }
+    }
   }, [getClock])
 
   const apply = useCallback(res => {
@@ -307,15 +419,22 @@ export function VillagePage({ ctx, skin: startSkin }) {
     }
     if (res.budget) setBudget(res.budget)
     if (res.legacy) setLegacy(res.legacy)
+    if (res.chronicle) setStory(res.chronicle)
   }, [sampleLive])
 
   const refresh = useCallback(async () => {
     lastFetch.current = Date.now()
     try {
       apply(await api.state(worldRef.current?.land_view?.rev))
-      if (mounted.current) setError('')
+      if (mounted.current) { setError(''); setSetup(null) }
     } catch (e) {
-      if (mounted.current) setError(errText(e))
+      if (!mounted.current) return
+      const text = errText(e)
+      setError(text)
+      // an engine that is missing or out of date gets a button, not a command to go and find
+      if (/village engine/i.test(text)) {
+        try { const state = await api.engine(); if (mounted.current) setSetup(state) } catch { /* the error above still shows */ }
+      }
     }
   }, [api, apply])
 
@@ -362,7 +481,7 @@ export function VillagePage({ ctx, skin: startSkin }) {
     if (!boxRef.current) return undefined
     let sc
     try {
-      sc = createScene(boxRef.current)
+      sc = createScene(boxRef.current, { onPick: name => setSelected(s => (s === name ? null : name)) })
     } catch (e) {
       setError(`3D view unavailable: ${errText(e)}`)
       return undefined
@@ -373,7 +492,60 @@ export function VillagePage({ ctx, skin: startSkin }) {
   }, [getClock])
 
   useEffect(() => { if (world) sceneRef.current?.setPlayback(world, getClock) }, [world, getClock])
-  useEffect(() => { sceneRef.current?.select(selected) }, [selected])
+  useEffect(() => { selectedRef.current = selected; sceneRef.current?.select(selected) }, [selected])
+
+  useEffect(() => {
+    if (!miniCanvas.current) return undefined
+    const mini = createMinimap(miniCanvas.current, (x, y) => sceneRef.current?.lookAt(x, y))
+    miniRef.current = mini
+    return () => { miniRef.current = null; mini.dispose() }
+  }, [])
+
+  useEffect(() => {
+    const s = createSound()
+    soundRef.current = s
+    return () => { soundRef.current = null; s.dispose() }
+  }, [])
+
+  // a browser will not start audio on its own, so a remembered "on" waits for the first press
+  useEffect(() => {
+    if (!sound) { soundRef.current?.set(false); return undefined }
+    const begin = () => soundRef.current?.set(true)
+    begin()
+    window.addEventListener('pointerdown', begin, { once: true })
+    return () => window.removeEventListener('pointerdown', begin)
+  }, [sound])
+
+  const toggleSound = () => setSound(on => {
+    remember('hermes-village.sound', on ? 'off' : 'on')
+    return !on
+  })
+
+  const goHome = useCallback(() => {
+    const camp = worldRef.current?.camp
+    if (camp) sceneRef.current?.lookAt(camp[0], camp[1])
+  }, [])
+
+  // RimWorld's keys. They only count while the page has the focus, so typing in chat is never caught.
+  useEffect(() => {
+    const onKey = e => {
+      const at = e.target
+      if (e.ctrlKey || e.metaKey || e.altKey || at?.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(at?.tagName ?? '')) return
+      if (!(at === document.body || boxRef.current?.closest('.hv')?.contains(at))) return
+      const w = worldRef.current
+      if (!w) return
+      const go = n => void run('speed', () => api.speed(n))
+      if (e.code === 'Space') go(w.paused_at ? w.speed : 0)
+      else if (/^Digit[1-5]$/.test(e.code) && w.speeds?.[Number(e.code.slice(5)) - 1]) go(w.speeds[Number(e.code.slice(5)) - 1])
+      else if (e.key === 'c' || e.key === 'C') goHome()
+      else if (e.key === 'f' || e.key === 'F') sceneRef.current?.watch()
+      else if (e.key === 'Escape') { setTab(null); setSelected(null) }
+      else return
+      e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [api, run, goHome])
 
   useEffect(() => { if (world && guideText === '') setGuideText(world.guidance ?? '') }, [world?.guidance]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (budget) setBudgetText(String(budget.daily_tokens)) }, [budget?.daily_tokens]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -400,6 +572,19 @@ export function VillagePage({ ctx, skin: startSkin }) {
       setHint('Press Enter in chat to let the villagers plan (uses model tokens)')
     } catch {
       setHint('Type /village plan in chat')
+    }
+  }
+
+  const installEngine = async () => {
+    setBusy('engine')
+    setError('')
+    try {
+      await api.installEngine()
+      await refresh()
+    } catch (e) {
+      if (mounted.current) setError(errText(e))
+    } finally {
+      if (mounted.current) setBusy('')
     }
   }
 
@@ -435,23 +620,28 @@ export function VillagePage({ ctx, skin: startSkin }) {
         <strong style={{ fontSize: 15, whiteSpace: 'nowrap' }}>{world ? `${world.settlement ?? 'Camp'} · Day ${world.day ?? '-'}` : 'Loading…'}</strong>
         <span style={{ ...S.low, whiteSpace: 'nowrap' }}>{spd}{live?.phase ? ` · ${live.phase}` : ''}{paused ? ' · Paused' : ''}</span>
         <DayBar dayT={live?.dayT} wf={wf} />
-        {guide && <span style={{ ...S.low, whiteSpace: 'nowrap' }}>{guide.era}</span>}
+        {guide && <span className="hv-w2" style={{ ...S.low, whiteSpace: 'nowrap' }}>{guide.era}</span>}
         {guide && <span style={S.stat} title="Earned as the village lives and learns. Spend it on ideas and upgrades."><strong style={{ color: C.gold, fontSize: 15 }}>{guide.insight}</strong><span style={S.low}>Insight</span></span>}
         {guide && (
           <span style={S.stat} title={guide.trust < guide.trust_heeded ? 'They ignore your focus on free days. Good advice wins them back.' : 'They follow your focus on free days.'}>
             <strong style={{ color: guide.trust < guide.trust_heeded ? C.red : C.text }}>{guide.trust}</strong><span style={S.low}>Trust</span><Meter value={guide.trust} max={100} width={36} color={guide.trust < guide.trust_heeded ? C.red : C.gold} />
           </span>
         )}
-        <span style={S.stat} title={lastCall?.model ? `Last council used ${lastCall.model}` : 'Model tokens used today'}><strong>{tokensLeft}</strong><span style={S.low}>tokens · {plans} {plans === 1 ? 'council' : 'councils'}</span></span>
+        <span className="hv-w1" style={S.stat} title={lastCall?.model ? `Last council used ${lastCall.model}` : 'Model tokens used today'}><strong>{tokensLeft}</strong><span style={S.low}>tokens · {plans} {plans === 1 ? 'council' : 'councils'}</span></span>
       </div>
 
-      <Resources res={world?.resources} people={(world?.villagers ?? []).filter(v => !v.dying).length} />
+      <div style={S.left}>
+        <Resources res={world?.resources} world={world} people={(world?.villagers ?? []).filter(v => !v.dying).length} />
+        <div style={S.feed}>
+          {dusk && (world?.current?.events ?? []).map(e => <strong key={e} style={{ color: DARK.test(e) ? C.red : C.gold }}>{plain(e)}</strong>)}
+          {(live?.feed ?? []).slice(0, 3).map((f, i) => (
+            <div key={`${i}-${f.name}-${f.text}`} style={{ opacity: f.ok ? 0.95 - i * 0.2 : 0.6 }}><strong>{f.name}</strong> {f.ok ? '' : '✗ '}{feedText(f.text, world?.camp)}</div>
+          ))}
+        </div>
+      </div>
 
-      <div style={S.feed}>
-        {dusk && (world?.current?.events ?? []).map(e => <strong key={e} style={{ color: C.gold }}>{e}</strong>)}
-        {(live?.feed ?? []).slice(0, 3).map((f, i) => (
-          <div key={`${i}-${f.name}-${f.text}`} style={{ opacity: f.ok ? 0.95 - i * 0.2 : 0.6 }}><strong>{f.name}</strong> {f.ok ? '' : '✗ '}{f.text}</div>
-        ))}
+      <div className="hv-panel hv-mini" style={{ ...S.mini, display: tab ? 'none' : undefined }} title="What they have seen. Click to look there.">
+        <canvas ref={miniCanvas} width={MINIMAP_SIZE} height={MINIMAP_SIZE} style={{ width: MINIMAP_SIZE, height: MINIMAP_SIZE, borderRadius: 6, cursor: 'pointer' }} />
       </div>
 
       <div className="hv-panel" style={S.rail}>
@@ -475,7 +665,7 @@ export function VillagePage({ ctx, skin: startSkin }) {
             {tab === 'upgrades' && <UpgradesTab guide={guide} idle={idle} run={run} api={api} />}
             {tab === 'legacy' && <LegacyTab legacy={legacy} idle={idle} run={run} api={api} />}
             {tab === 'build' && <BuildTab buildings={world?.buildings} built={world?.built} />}
-            {tab === 'log' && <LogTab log={world?.log} />}
+            {tab === 'story' && <StoryTab story={story.filter(n => dusk || n.day < (world?.current?.day ?? Infinity))} log={world?.log} />}
             {tab === 'speak' && (
               <>
                 <div style={S.low}>Tell the villagers what you think. They hear it at the next council, and may disagree.</div>
@@ -490,6 +680,10 @@ export function VillagePage({ ctx, skin: startSkin }) {
                 <div style={S.row}>
                   {SKINS.map(([key, label]) => <Btn key={key} on={skin === key} onClick={() => chooseSkin(key)}>{label}</Btn>)}
                 </div>
+                <div style={S.h}>Sound</div>
+                <div><Btn on={sound} onClick={toggleSound}>{sound ? 'Sound on' : 'Sound off'}</Btn></div>
+                <div style={S.h}>Keys</div>
+                <div style={S.low}>Space pauses, 1 to 5 set the speed, C goes to camp, F follows, Esc closes.</div>
                 <div style={S.h}>Daily token limit</div>
                 <div style={S.row}>
                   <input type="number" min="0" step="1000" style={S.input} value={budgetText} onChange={e => setBudgetText(e.target.value)} />
@@ -511,8 +705,12 @@ export function VillagePage({ ctx, skin: startSkin }) {
       {shown && !(shown.dying && dusk) && <PersonCard v={shown} live={live?.villagers?.[shown.name]} maxHealth={world?.max_health ?? 5} onClose={() => setSelected(null)} />}
 
       {world?.fallen && dusk && (
-        <div className="hv-panel" style={S.notice}>
-          <div><strong>The village has fallen.</strong> Everyone was gone by day {world.fallen}.</div>
+        <div className="hv-panel" style={S.welcome}>
+          <strong style={{ fontSize: 17 }}>The village has fallen.</strong>
+          <div style={S.mid}>{world.settlement ?? 'The camp'} lasted {world.fallen} {world.fallen === 1 ? 'day' : 'days'} and never got past the {guide?.era ?? 'Stone Age'}.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 220, overflowY: 'auto' }}>
+            {story.map((n, i) => <div key={`${n.day}-${i}`} style={{ display: 'flex', gap: 8 }}><span style={{ ...S.low, flex: '0 0 48px' }}>Day {n.day}</span><span style={{ color: DARK.test(n.text) ? C.red : C.text }}>{n.text}</span></div>)}
+          </div>
           <div><Btn primary disabled={idle} onClick={() => { setSelected(null); setGuideText(''); void run('reset', () => api.reset()) }}>Start again · bank {legacy?.would_earn ?? 0} Legacy</Btn></div>
         </div>
       )}
@@ -522,14 +720,18 @@ export function VillagePage({ ctx, skin: startSkin }) {
           <div>
             <strong>While you were away: {away.days} days passed</strong>
             {fmtItems(away.gained) && <div style={S.mid}>{fmtItems(away.gained)}</div>}
-            {(away.built ?? []).length > 0 && <div style={S.mid}>Built {away.built.join(', ').replace(/_/g, ' ')}</div>}
+            {(away.built ?? []).length > 0 && <div style={S.mid}>Built {plain(away.built.join(', '))}</div>}
             {(away.deaths ?? []).map(d => <div key={d.name} style={{ color: C.red }}>{d.name} died of {d.cause}</div>)}
           </div>
           <div><Btn disabled={idle} onClick={() => void run('ack', api.ack)}>OK</Btn></div>
         </div>
       )}
 
-      {(error || hint) && <div role="alert" className="hv-panel" style={{ ...S.notice, top: 'auto', bottom: DOCK + 16, borderColor: error ? C.red : C.line }}>{error || hint}</div>}
+      {setup && <EngineSetup setup={setup} busy={busy === 'engine'} onInstall={() => void installEngine()} />}
+
+      {welcome && world && !setup && <Welcome onBegin={() => { setWelcome(false); remember('hermes-village.welcomed', '1') }} />}
+
+      {(error || hint) && !setup && <div role="alert" className="hv-panel" style={{ ...S.notice, top: 'auto', bottom: DOCK + 16, borderColor: error ? C.red : C.line }}>{error || hint}</div>}
 
       <div className="hv-panel" style={S.dock}>
         <div style={S.people}>
@@ -539,21 +741,23 @@ export function VillagePage({ ctx, skin: startSkin }) {
           ))}
         </div>
         <div style={S.bar}>
-          <span style={S.h}>Focus</span>
+          <span className="hv-w1" style={S.h}>Focus</span>
           {guide && Object.entries(guide.focuses).map(([key, text]) => (
-            <Btn key={key} on={guide.focus === key} disabled={idle} title={`Urge them to ${text}. Judged every ${guide.focus_days} days.`}
+            <Btn key={key} on={guide.focus === key} disabled={idle || !!world?.fallen} title={`Urge them to ${text}. Judged every ${guide.focus_days} days.`}
               onClick={() => void run('focus', () => api.focus(guide.focus === key ? null : key))}>
               {key[0].toUpperCase() + key.slice(1)}
             </Btn>
           ))}
-          <span style={{ ...S.h, marginLeft: 'auto' }}>Speed</span>
+          <span style={{ flex: 1 }} />
+          <span className="hv-w1" style={S.h}>Speed</span>
           <Btn on={paused} disabled={planning} title="Pause" aria-label="Pause" onClick={() => void run('speed', () => api.speed(paused ? world.speed : 0))}>❚❚</Btn>
           {(world?.speeds ?? []).map(n => (
-            <Btn key={n} on={!paused && world?.speed === n} disabled={planning} onClick={() => void run('speed', () => api.speed(n))}>{n}x</Btn>
+            <Btn key={n} className={n === 2 || n === 8 ? 'hv-w2' : ''} on={!paused && world?.speed === n} disabled={planning} onClick={() => void run('speed', () => api.speed(n))}>{n}x</Btn>
           ))}
-          <Btn title="Camera follows the group" onClick={() => sceneRef.current?.watch()}>Follow</Btn>
-          <Btn primary disabled={!budget?.can_plan || idle || planning || world?.council_ready} title={world?.council_ready ? 'The council has decided. Its plans start at dawn.' : reasons.length ? reasons.join('; ') : 'One model call plans everyone\'s next day'} onClick={() => void planDay()}>
-            {planning ? 'Council meeting…' : world?.council_ready ? 'Plans set for dawn' : `Hold council${estLabel}`}{reasons.length && !world?.council_ready ? ' •' : ''}
+          <Btn className="hv-w1" title="Look at the camp (C)" onClick={goHome}>Camp</Btn>
+          <Btn className="hv-w1" title="Camera follows the group (F)" onClick={() => sceneRef.current?.watch()}>Follow</Btn>
+          <Btn primary disabled={!budget?.can_plan || idle || planning || world?.council_ready || !!world?.fallen} title={world?.council_ready ? 'The council has decided. Its plans start at dawn.' : reasons.length ? reasons.join('; ') : 'One model call plans everyone\'s next day'} onClick={() => void planDay()}>
+            {planning ? 'Council meeting…' : world?.council_ready ? 'Plans set for dawn' : <>Hold council<span className="hv-w1">{estLabel}</span></>}{reasons.length && !world?.council_ready ? ' •' : ''}
           </Btn>
         </div>
       </div>

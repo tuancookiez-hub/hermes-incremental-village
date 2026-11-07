@@ -1,1 +1,1 @@
-"""Hermes Village game core: rules, storage, planning."""
+"""Hermes Incremental Village game core: rules, storage, planning."""

@@ -12,6 +12,8 @@ function makeApi(ctx) {
   const call = (path, method = "GET", body) => ctx.rest(path, method === "GET" ? { method } : { method, body: body ?? {} });
   return {
     state: (have) => call(have ? `/state?have=${encodeURIComponent(have)}` : "/state"),
+    engine: () => call("/engine"),
+    installEngine: () => call("/engine", "POST", {}),
     guide: (text) => call("/guide", "POST", { text }),
     habit: () => call("/habit", "POST", {}),
     ack: () => call("/ack", "POST", {}),
@@ -11723,20 +11725,20 @@ var Plane = class {
    * @param {boolean} [clampToLine=true] - Whether to clamp the intersection to the line segment.
    * @return {?Vector3} The intersection point. Returns `null` if no intersection is detected.
    */
-  intersectLine(line, target, clampToLine = true) {
-    const direction = line.delta(_vector1);
+  intersectLine(line2, target, clampToLine = true) {
+    const direction = line2.delta(_vector1);
     const denominator = this.normal.dot(direction);
     if (denominator === 0) {
-      if (this.distanceToPoint(line.start) === 0) {
-        return target.copy(line.start);
+      if (this.distanceToPoint(line2.start) === 0) {
+        return target.copy(line2.start);
       }
       return null;
     }
-    const t = -(line.start.dot(this.normal) + this.constant) / denominator;
+    const t = -(line2.start.dot(this.normal) + this.constant) / denominator;
     if (clampToLine === true && (t < 0 || t > 1)) {
       return null;
     }
-    return target.copy(line.start).addScaledVector(direction, t);
+    return target.copy(line2.start).addScaledVector(direction, t);
   }
   /**
    * Returns `true` if the given line segment intersects with (passes through) the plane.
@@ -11744,9 +11746,9 @@ var Plane = class {
    * @param {Line3} line - The line to test.
    * @return {boolean} Whether the given line segment intersects with the plane or not.
    */
-  intersectsLine(line) {
-    const startSign = this.distanceToPoint(line.start);
-    const endSign = this.distanceToPoint(line.end);
+  intersectsLine(line2) {
+    const startSign = this.distanceToPoint(line2.start);
+    const endSign = this.distanceToPoint(line2.end);
     return startSign < 0 && endSign > 0 || endSign < 0 && startSign > 0;
   }
   /**
@@ -22384,8 +22386,8 @@ function handleSource(string, errorLine) {
   const from = Math.max(errorLine - 6, 0);
   const to = Math.min(errorLine + 6, lines.length);
   for (let i = from; i < to; i++) {
-    const line = i + 1;
-    lines2.push(`${line === errorLine ? ">" : " "} ${line}: ${lines[i]}`);
+    const line2 = i + 1;
+    lines2.push(`${line2 === errorLine ? ">" : " "} ${line2}: ${lines[i]}`);
   }
   return lines2.join("\n");
 }
@@ -33204,12 +33206,12 @@ ${shader.fragmentShader}`.replace("#include <dithering_fragment>", `#include <di
   scene.add(flakes);
   let winterMix = 0;
   const frost = new Color(1.32, 1.4, 1.55);
-  const plain = new Color(1, 1, 1);
+  const plain2 = new Color(1, 1, 1);
   const chill = new Color(13623551);
   const frosted = [mat.foliage, mat.pine, mat.rock, mat.thatch, mat.thatchB].map((m) => [m, m.color.clone()]);
   function seasonLook(name, dt) {
     winterMix += ((name === "winter" ? 1 : 0) - winterMix) * (1 - Math.exp(-dt * 1.2));
-    mat.land.color.lerpColors(plain, frost, winterMix);
+    mat.land.color.lerpColors(plain2, frost, winterMix);
     mat.land.emissive.setRGB(0.62, 0.68, 0.8);
     mat.land.emissiveIntensity = 0.62 * winterMix;
     for (const [m, base] of frosted) {
@@ -33322,7 +33324,7 @@ var SPREAD = { Ash: [-0.24, -0.1], Bryn: [0.24, -0.1], Coll: [0, 0.2] };
 var BUILD_SPOT = new Vector2(0.5, 0.4);
 var wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 var trunc = (s, n) => s.length > n ? `${s.slice(0, n - 1)}\u2026` : s;
-function createScene(container) {
+function createScene(container, { onPick } = {}) {
   const renderer = new WebGLRenderer({ antialias: false, alpha: false, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
   renderer.domElement.style.display = "block";
@@ -33723,15 +33725,25 @@ function createScene(container) {
   function select(name) {
     selected = name && villagers.has(name) ? name : null;
     following = !!selected;
+    glide = null;
     if (!selected) watching = true;
   }
   function watch() {
+    glide = null;
     following = !!selected;
     watching = true;
   }
+  let glide = null;
+  function lookAt(x, y) {
+    following = false;
+    watching = false;
+    glide = { x: wx(x), z: wz(y) };
+  }
+  const lookingAt = () => ({ x: Math.round(controls.target.x - 0.5), y: Math.round(controls.target.z - 0.5) });
   const onCtrlStart = () => {
     following = false;
     watching = false;
+    glide = null;
   };
   controls.addEventListener("start", onCtrlStart);
   const raycaster = new Raycaster();
@@ -33748,8 +33760,21 @@ function createScene(container) {
   const onLeave = () => {
     hovered = null;
   };
+  let press = null;
+  const onDown = (e) => {
+    press = { x: e.clientX, y: e.clientY };
+  };
+  const onUp = (e) => {
+    if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 6) {
+      onMove(e);
+      if (hovered) onPick?.(hovered);
+    }
+    press = null;
+  };
   renderer.domElement.addEventListener("pointermove", onMove);
   renderer.domElement.addEventListener("pointerleave", onLeave);
+  renderer.domElement.addEventListener("pointerdown", onDown);
+  renderer.domElement.addEventListener("pointerup", onUp);
   const resize = () => {
     const w = Math.max(1, container.clientWidth);
     const h = Math.max(1, container.clientHeight);
@@ -33985,7 +34010,14 @@ function createScene(container) {
         f.s.material.opacity = 1 - age * age;
       }
     }
-    if (following && selected && villagers.has(selected)) {
+    if (glide) {
+      goal.set(glide.x, 0.4, glide.z);
+      delta.copy(goal).sub(controls.target);
+      if (delta.length() < 0.05) glide = null;
+      delta.multiplyScalar(1 - Math.exp(-dt * 5));
+      controls.target.add(delta);
+      camera.position.add(delta);
+    } else if (following && selected && villagers.has(selected)) {
       const p = villagers.get(selected).pos;
       goal.set(p.x, 0.4, p.z);
       delta.copy(goal).sub(controls.target).multiplyScalar(1 - Math.exp(-dt * 5));
@@ -34020,6 +34052,8 @@ function createScene(container) {
   start();
   return {
     watch,
+    lookAt,
+    lookingAt,
     update,
     setPlayback,
     select,
@@ -34031,6 +34065,8 @@ function createScene(container) {
       document.removeEventListener("visibilitychange", onVis);
       renderer.domElement.removeEventListener("pointermove", onMove);
       renderer.domElement.removeEventListener("pointerleave", onLeave);
+      renderer.domElement.removeEventListener("pointerdown", onDown);
+      renderer.domElement.removeEventListener("pointerup", onUp);
       controls.removeEventListener("start", onCtrlStart);
       for (const f of floats) disposeSprite(f.s);
       floats.length = 0;
@@ -34080,6 +34116,10 @@ var Play_Regular_default = "data:font/woff;base64,d09GRgABAAAAADOAABEAAAAAXlAAAQ
 
 // src/skins.js
 var SKIN_CSS = `
+.hv { container-type: size; }
+@container (max-height: 590px) { .hv-mini { display: none; } }
+@container (max-width: 920px) { .hv-w1 { display: none !important; } }
+@container (max-width: 700px) { .hv-w2 { display: none !important; } .hv .hv-btn { padding: 5px 5px !important; font-size: 11px !important; } }
 @font-face { font-family: 'HV Play'; src: url(${Play_Regular_default}) format('woff'); }
 
 .hv[data-skin="wood"] { --hv-mid: #cdbb9b; --hv-low: #a08d71; font-family: ui-monospace, Consolas, monospace; }
@@ -34124,6 +34164,219 @@ var SKIN_CSS = `
 .hv[data-skin="ps1"] .hv-btn:hover:not(:disabled) { filter: brightness(1.25); }
 `;
 
+// src/minimap.js
+var MINIMAP_SIZE = 132;
+var MIN_SPAN = 32;
+var COLORS = {
+  ".": [122, 139, 72],
+  T: [46, 92, 52],
+  b: [120, 96, 60],
+  "~": [58, 120, 138],
+  R: [128, 124, 116]
+};
+var FALLBACK = [110, 120, 80];
+function createMinimap(canvas2, onLook) {
+  const SIZE = MINIMAP_SIZE;
+  const ctx = canvas2.getContext("2d");
+  const land = document.createElement("canvas");
+  let rev = null;
+  let box = { x: 0, y: 0, w: 1, h: 1 };
+  let frame = { cx: 0, cy: 0, span: MIN_SPAN };
+  function paint(view) {
+    const keys = Object.keys(view?.seen ?? {});
+    if (!keys.length) return;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const key of keys) {
+      const [kx, ky] = key.split(",").map(Number);
+      x0 = Math.min(x0, kx * 16);
+      y0 = Math.min(y0, ky * 16);
+      x1 = Math.max(x1, kx * 16 + 16);
+      y1 = Math.max(y1, ky * 16 + 16);
+    }
+    box = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    land.width = box.w;
+    land.height = box.h;
+    const pen = land.getContext("2d");
+    const image = pen.createImageData(box.w, box.h);
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const key of keys) {
+      const [kx, ky] = key.split(",").map(Number);
+      const seen = view.seen[key];
+      const chars = view.land[key] ?? "";
+      for (let i = 0; i < 256; i++) {
+        if (seen[i] !== "1") continue;
+        const x = kx * 16 + (i & 15);
+        const y = ky * 16 + (i >> 4);
+        const at = ((y - box.y) * box.w + (x - box.x)) * 4;
+        const [r, g, b] = COLORS[chars[i]] ?? FALLBACK;
+        image.data[at] = r;
+        image.data[at + 1] = g;
+        image.data[at + 2] = b;
+        image.data[at + 3] = 255;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+    pen.putImageData(image, 0, 0);
+    frame = { cx: (minX + maxX + 1) / 2, cy: (minY + maxY + 1) / 2, span: Math.max(MIN_SPAN, Math.max(maxX - minX, maxY - minY) * 1.15 + 8) };
+  }
+  const toMap = (x, y) => [((x - frame.cx) / frame.span + 0.5) * SIZE, ((y - frame.cy) / frame.span + 0.5) * SIZE];
+  function dot(x, y, r, fill) {
+    const [mx, my] = toMap(x, y);
+    ctx.beginPath();
+    ctx.arc(mx, my, r, 0, Math.PI * 2);
+    ctx.fillStyle = "#000";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(mx, my, r - 0.8, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  function draw(world, people, look, selected) {
+    const view = world?.land_view;
+    if (view && view.rev !== rev) {
+      rev = view.rev;
+      paint(view);
+    }
+    ctx.fillStyle = "#05060c";
+    ctx.fillRect(0, 0, SIZE, SIZE);
+    ctx.imageSmoothingEnabled = false;
+    const [lx, ly] = toMap(box.x, box.y);
+    const scale = SIZE / frame.span;
+    ctx.drawImage(land, lx, ly, box.w * scale, box.h * scale);
+    if (look) {
+      const [mx, my] = toMap(look.x, look.y);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(Math.round(mx) - 6.5, Math.round(my) - 6.5, 13, 13);
+    }
+    if (world?.camp) {
+      const [mx, my] = toMap(world.camp[0], world.camp[1]);
+      ctx.fillStyle = "#000";
+      ctx.fillRect(mx - 3, my - 3, 6, 6);
+      ctx.fillStyle = "#e6b450";
+      ctx.fillRect(mx - 2, my - 2, 4, 4);
+    }
+    for (const h of world?.resources?.herds ?? []) dot(h.x, h.y, 2, "#d98a5a");
+    for (const [name, p] of Object.entries(people ?? {})) dot(p.x, p.y, name === selected ? 3.4 : 2.6, name === selected ? "#e6b450" : "#fff");
+  }
+  const onClick = (e) => {
+    const r = canvas2.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width - 0.5) * frame.span + frame.cx;
+    const y = ((e.clientY - r.top) / r.height - 0.5) * frame.span + frame.cy;
+    onLook(Math.round(x), Math.round(y));
+  };
+  canvas2.addEventListener("click", onClick);
+  return { draw, dispose() {
+    canvas2.removeEventListener("click", onClick);
+  } };
+}
+
+// src/sound.js
+var FULL = 0.5;
+function createSound() {
+  let ac = null;
+  let master = null;
+  let windGain = null;
+  let on = false;
+  let nextCall = 0;
+  function noise(seconds) {
+    const buffer = ac.createBuffer(1, ac.sampleRate * seconds, ac.sampleRate);
+    const data = buffer.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < data.length; i++) {
+      last = last * 0.97 + (Math.random() * 2 - 1) * 0.03;
+      data[i] = last * 8;
+    }
+    return buffer;
+  }
+  function wake() {
+    if (ac) return;
+    const Ctx = window.AudioContext ?? window.webkitAudioContext;
+    if (!Ctx) return;
+    ac = new Ctx();
+    master = ac.createGain();
+    master.gain.value = 0;
+    master.connect(ac.destination);
+    const wind = ac.createBufferSource();
+    wind.buffer = noise(6);
+    wind.loop = true;
+    const air = ac.createBiquadFilter();
+    air.type = "lowpass";
+    air.frequency.value = 520;
+    windGain = ac.createGain();
+    windGain.gain.value = 0.05;
+    wind.connect(air).connect(windGain).connect(master);
+    wind.start();
+  }
+  function tone(freq, start, length, volume, type = "sine", slide = 1) {
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, start);
+    osc.frequency.exponentialRampToValueAtTime(freq * slide, start + length);
+    gain.gain.setValueAtTime(1e-4, start);
+    gain.gain.exponentialRampToValueAtTime(volume, start + Math.min(0.03, length / 3));
+    gain.gain.exponentialRampToValueAtTime(1e-4, start + length);
+    osc.connect(gain).connect(master);
+    osc.start(start);
+    osc.stop(start + length + 0.02);
+  }
+  function bird(at) {
+    const base = 2400 + Math.random() * 1600;
+    const notes = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < notes; i++) tone(base * (1 + Math.random() * 0.25), at + i * 0.13, 0.09, 0.05, "sine", 0.85 + Math.random() * 0.4);
+  }
+  function cricket(at) {
+    for (let i = 0; i < 3; i++) tone(4300, at + i * 0.07, 0.04, 0.012, "triangle");
+  }
+  function tick({ phase, season, paused }) {
+    if (!on || !ac) return;
+    const now = ac.currentTime;
+    const cold = season === "winter";
+    windGain.gain.setTargetAtTime(paused ? 0.02 : cold ? 0.16 : 0.05, now, 1.2);
+    if (paused || cold || now < nextCall) return;
+    if (phase === "Night" || phase === "Dusk") {
+      if (season !== "spring") cricket(now);
+      nextCall = now + 0.7 + Math.random() * 1.6;
+    } else {
+      bird(now);
+      nextCall = now + 2.5 + Math.random() * 6;
+    }
+  }
+  function cue(kind) {
+    if (!on || !ac) return;
+    const now = ac.currentTime;
+    if (kind === "death") {
+      tone(196, now, 2.6, 0.18);
+      tone(233, now + 0.04, 2.4, 0.09);
+    } else if (kind === "learn") {
+      tone(523, now, 0.5, 0.08);
+      tone(659, now + 0.13, 0.6, 0.08);
+      tone(784, now + 0.26, 0.9, 0.08);
+    }
+  }
+  return {
+    set(value) {
+      on = !!value;
+      if (on) {
+        wake();
+        void ac?.resume?.();
+      }
+      if (master) master.gain.setTargetAtTime(on ? FULL : 0, ac.currentTime, 0.3);
+    },
+    tick,
+    cue,
+    dispose() {
+      on = false;
+      void ac?.close?.();
+      ac = null;
+    }
+  };
+}
+
 // src/VillagePage.jsx
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 var { host } = sdk;
@@ -34139,7 +34392,8 @@ var C = {
   red: "#e8695a",
   green: "#86c172"
 };
-var glass = { background: C.glass, backdropFilter: "blur(10px)", border: `1px solid ${C.line}`, borderRadius: 10 };
+var line = { borderWidth: 1, borderStyle: "solid", borderColor: C.line };
+var glass = { background: C.glass, backdropFilter: "blur(10px)", ...line, borderRadius: 10 };
 var TOP = 46;
 var DOCK = 130;
 var RAIL = 62;
@@ -34153,22 +34407,25 @@ var S = {
   drawerBody: { flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 12px 12px", display: "flex", flexDirection: "column", gap: 10 },
   dock: { ...glass, position: "absolute", left: 8, right: 8, bottom: 8, height: DOCK, boxSizing: "border-box", padding: 8, display: "flex", flexDirection: "column", gap: 8 },
   people: { display: "flex", gap: 6, flex: 1, minHeight: 0 },
-  person: { flex: "1 1 0", minWidth: 0, background: C.raised, border: `1px solid ${C.line}`, borderRadius: 8, padding: "5px 8px", color: C.text, font: "inherit", textAlign: "left", cursor: "pointer", display: "flex", flexDirection: "column", justifyContent: "center", gap: 1 },
+  person: { flex: "1 1 0", minWidth: 0, background: C.raised, ...line, borderRadius: 8, padding: "5px 8px", color: C.text, font: "inherit", textAlign: "left", cursor: "pointer", display: "flex", flexDirection: "column", justifyContent: "center", gap: 1 },
   bar: { display: "flex", alignItems: "center", gap: 6 },
   clip: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   h: { fontSize: 11, fontWeight: 600, letterSpacing: 0.5, textTransform: "uppercase", color: C.low },
   mid: { color: C.mid },
   low: { color: C.low, fontSize: 12 },
   row: { display: "flex", gap: 8, alignItems: "center" },
-  stock: { ...glass, position: "absolute", top: TOP + 16, left: 8, boxSizing: "border-box", padding: "6px 10px", display: "flex", flexDirection: "column", gap: 1 },
-  feed: { position: "absolute", top: TOP + 116, left: 12, width: "min(320px, 45%)", display: "flex", flexDirection: "column", gap: 2, fontSize: 12, textShadow: "0 1px 3px rgba(0,0,0,0.9)", pointerEvents: "none" },
+  left: { position: "absolute", top: TOP + 16, left: 8, width: "min(320px, 45%)", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8, pointerEvents: "none" },
+  stock: { ...glass, boxSizing: "border-box", padding: "6px 10px", display: "flex", flexDirection: "column", gap: 1, pointerEvents: "auto" },
+  feed: { paddingLeft: 4, display: "flex", flexDirection: "column", gap: 2, fontSize: 12, textShadow: "0 1px 3px rgba(0,0,0,0.9)" },
+  mini: { ...glass, position: "absolute", right: 8, bottom: DOCK + 16, padding: 4, lineHeight: 0, overflow: "hidden" },
+  welcome: { ...glass, position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(440px, 80%)", maxHeight: "calc(100% - 40px)", overflowY: "auto", boxSizing: "border-box", padding: 18, display: "flex", flexDirection: "column", gap: 10, borderColor: C.gold },
   card: { ...glass, position: "absolute", left: 8, bottom: DOCK + 16, width: 300, maxWidth: "calc(100% - 100px)", boxSizing: "border-box", padding: 12, display: "flex", flexDirection: "column", gap: 6 },
   notice: { ...glass, position: "absolute", top: TOP + 16, left: "50%", transform: "translateX(-50%)", width: "min(380px, 60%)", boxSizing: "border-box", padding: 12, display: "flex", flexDirection: "column", gap: 8, borderColor: C.gold },
-  input: { width: "100%", boxSizing: "border-box", background: C.raised, color: C.text, border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 8px", font: "inherit", resize: "none" }
+  input: { width: "100%", boxSizing: "border-box", background: C.raised, color: C.text, ...line, borderRadius: 8, padding: "6px 8px", font: "inherit", resize: "none" }
 };
-function Btn({ primary, on, style, ...props }) {
+function Btn({ primary, on, style, className = "", ...props }) {
   const look = primary ? { background: C.gold, color: "#1a1408", borderColor: C.gold, fontWeight: 600 } : on ? { background: "rgba(230, 180, 80, 0.18)", color: C.gold, borderColor: C.gold } : { background: C.raised, color: C.text, borderColor: C.line };
-  return /* @__PURE__ */ jsx("button", { type: "button", ...props, className: `hv-btn${primary ? " hv-primary" : ""}`, "data-on": on ? "true" : void 0, style: { font: "inherit", fontSize: 12, border: "1px solid", borderRadius: 7, padding: "5px 10px", whiteSpace: "nowrap", cursor: props.disabled ? "default" : "pointer", opacity: props.disabled ? 0.4 : 1, ...look, ...style } });
+  return /* @__PURE__ */ jsx("button", { type: "button", ...props, className: `hv-btn${primary ? " hv-primary" : ""} ${className}`, "data-on": on ? "true" : void 0, style: { font: "inherit", fontSize: 12, borderWidth: 1, borderStyle: "solid", borderRadius: 7, padding: "5px 10px", whiteSpace: "nowrap", cursor: props.disabled ? "default" : "pointer", opacity: props.disabled ? 0.4 : 1, ...look, ...style } });
 }
 function Hearts({ value, max }) {
   return /* @__PURE__ */ jsxs("span", { "aria-label": `health ${value} of ${max}`, style: { color: value <= 2 ? C.red : C.gold, fontSize: 11, letterSpacing: 0.5 }, children: [
@@ -34323,9 +34580,21 @@ function BuildTab({ buildings, built }) {
     ] }) }, name);
   });
 }
+function StoryTab({ story, log: log2 }) {
+  return /* @__PURE__ */ jsxs(Fragment, { children: [
+    (story ?? []).map((n, i) => /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 8 }, children: [
+      /* @__PURE__ */ jsxs("span", { style: { ...S.low, flex: "0 0 44px" }, children: [
+        "Day ",
+        n.day
+      ] }),
+      /* @__PURE__ */ jsx("span", { style: { color: DARK.test(n.text) ? C.red : C.text }, children: n.text })
+    ] }, `${n.day}-${i}`)),
+    log2?.length > 0 && /* @__PURE__ */ jsx("div", { style: { ...S.h, marginTop: 6 }, children: "Recent days" }),
+    /* @__PURE__ */ jsx(LogTab, { log: log2 })
+  ] });
+}
 function LogTab({ log: log2 }) {
-  if (!log2?.length) return /* @__PURE__ */ jsx("div", { style: S.low, children: "No days recorded yet." });
-  return [...log2].reverse().map((d, i) => /* @__PURE__ */ jsxs("details", { children: [
+  return [...log2 ?? []].reverse().map((d, i) => /* @__PURE__ */ jsxs("details", { children: [
     /* @__PURE__ */ jsxs("summary", { style: { cursor: "pointer" }, children: [
       "Day ",
       d.day,
@@ -34336,7 +34605,7 @@ function LogTab({ log: log2 }) {
       ] })
     ] }),
     /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 6, padding: "4px 0 0 8px" }, children: [
-      (d.events ?? []).map((e) => /* @__PURE__ */ jsx("div", { children: /* @__PURE__ */ jsx("strong", { children: e }) }, e)),
+      (d.events ?? []).map((e) => /* @__PURE__ */ jsx("div", { children: /* @__PURE__ */ jsx("strong", { children: plain(e) }) }, e)),
       (d.villagers ?? []).map((vl) => /* @__PURE__ */ jsxs("div", { children: [
         /* @__PURE__ */ jsx("strong", { children: vl.name }),
         vl.thought && /* @__PURE__ */ jsxs("div", { style: { ...S.mid, fontStyle: "italic" }, children: [
@@ -34347,17 +34616,45 @@ function LogTab({ log: log2 }) {
         (vl.steps ?? []).map((st, j) => /* @__PURE__ */ jsxs("div", { style: st.ok ? S.mid : S.low, children: [
           st.ok ? "\u2713" : "\u2717",
           " ",
-          st.result ?? st.action?.verb
+          plain(st.result ?? st.action?.verb)
         ] }, j))
       ] }, vl.name))
     ] })
   ] }, `${d.day}-${i}`));
 }
+var DARK = /died of|has fallen|fire went out/;
+var plain = (text) => String(text ?? "").replace(/lean_to/g, "lean-to").replace(/_/g, " ");
+function feedText(text, camp) {
+  const walk = /^walked to \((-?\d+),(-?\d+)\)/.exec(text ?? "");
+  if (!walk || !camp) return plain(text).replace(/ (of|at|near) \(-?\d+,-?\d+\)/g, "");
+  const dx = Number(walk[1]) - camp[0];
+  const dy = Number(walk[2]) - camp[1];
+  const far = Math.round(Math.hypot(dx, dy));
+  if (far <= 3) return "walked back to camp";
+  const side = Math.abs(dy) > Math.abs(dx) * 2 ? "" : dx > 0 ? "east" : "west";
+  const facing = (Math.abs(dx) > Math.abs(dy) * 2 ? "" : dy > 0 ? "south" : "north") + side;
+  return `walked ${far} tiles ${facing || side} of camp`;
+}
+function outlook(world) {
+  const days = world.season_days;
+  if (!days || !world.day) return null;
+  const year = days * 4;
+  const today = (world.day - 1) % year;
+  const winter = days * 3;
+  if (today >= winter) {
+    const left = year - today;
+    return { text: `Winter: ${left} ${left === 1 ? "day" : "days"} to go`, bad: true };
+  }
+  const until = winter - today;
+  return { text: `Winter in ${until} ${until === 1 ? "day" : "days"}`, bad: until <= days };
+}
 function fmtItems(o) {
   return Object.entries(o ?? {}).filter(([, n]) => n > 0).map(([k, n]) => `+${n} ${k}`).join(", ");
 }
-function Resources({ res, people }) {
+function Resources({ res, people, world }) {
   if (!res) return null;
+  const ahead = outlook(world);
+  const meals = people > 0 ? Math.floor(res.held.food / people) : 0;
   const herds = {};
   for (const h of res.herds ?? []) herds[h.kind] = (herds[h.kind] ?? 0) + h.count;
   const animals = Object.entries(herds).map(([k, n]) => `${n} ${k}`).join(", ");
@@ -34374,11 +34671,71 @@ function Resources({ res, people }) {
       /* @__PURE__ */ jsx("span", { style: { ...S.low, whiteSpace: "nowrap" }, children: wild })
     ] }, name)),
     /* @__PURE__ */ jsx("div", { style: { ...S.low, whiteSpace: "nowrap" }, children: animals ? `Seen: ${animals}` : "No animals found" }),
-    res.fire_out && /* @__PURE__ */ jsx("div", { style: { color: C.red, fontSize: 12 }, children: "The fire is out" })
+    res.fire_out && /* @__PURE__ */ jsx("div", { style: { color: C.red, fontSize: 12 }, children: "The fire is out" }),
+    ahead && /* @__PURE__ */ jsx("div", { style: { fontSize: 12, marginTop: 3, color: ahead.bad ? C.gold : C.mid, whiteSpace: "nowrap" }, children: ahead.text }),
+    /* @__PURE__ */ jsxs("div", { style: { fontSize: 12, color: meals < 2 ? C.red : C.mid, whiteSpace: "nowrap" }, title: "Food held, divided by everyone alive", children: [
+      "Food lasts ",
+      meals,
+      " ",
+      meals === 1 ? "day" : "days"
+    ] })
   ] });
 }
-var TABS = [["ideas", "\u2726", "Ideas"], ["upgrades", "\u25B2", "Upgrades"], ["legacy", "\u25C6", "Legacy"], ["build", "\u2302", "Build"], ["speak", "\u270E", "Speak"], ["log", "\u2261", "Log"], ["settings", "\u2699", "Settings"]];
+var TABS = [["ideas", "\u2726", "Ideas"], ["upgrades", "\u25B2", "Upgrades"], ["legacy", "\u25C6", "Legacy"], ["build", "\u2302", "Build"], ["speak", "\u270E", "Speak"], ["story", "\u2261", "Story"], ["settings", "\u2699", "Settings"]];
 var SKINS = [["ps1", "PS1 blue"], ["wood", "RPG wood"]];
+function remembered(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function remember(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+  }
+}
+function Welcome({ onBegin }) {
+  return /* @__PURE__ */ jsxs("div", { className: "hv-panel", style: S.welcome, children: [
+    /* @__PURE__ */ jsx("strong", { style: { fontSize: 17 }, children: "You are not their god." }),
+    /* @__PURE__ */ jsx("div", { children: "Ash, Bryn and Coll are three people at the start of history. Hermes plays them: they think, argue and decide for themselves. You can only guide." }),
+    /* @__PURE__ */ jsxs("div", { style: S.mid, children: [
+      /* @__PURE__ */ jsx("strong", { style: { color: C.text }, children: "Focus" }),
+      " urges them on free days, if they trust you."
+    ] }),
+    /* @__PURE__ */ jsxs("div", { style: S.mid, children: [
+      /* @__PURE__ */ jsx("strong", { style: { color: C.text }, children: "Ideas" }),
+      " cost Insight and plant a thought. They still have to work it out."
+    ] }),
+    /* @__PURE__ */ jsxs("div", { style: S.mid, children: [
+      /* @__PURE__ */ jsx("strong", { style: { color: C.text }, children: "Hold council" }),
+      " makes one model call: they plan tomorrow themselves and you see what they chose."
+    ] }),
+    /* @__PURE__ */ jsx("div", { style: S.mid, children: "Everything is limited and winter kills. The land has no edge and starts dark, so what they need next is always further away." }),
+    /* @__PURE__ */ jsx("div", { children: /* @__PURE__ */ jsx(Btn, { primary: true, onClick: onBegin, children: "Begin" }) })
+  ] });
+}
+function EngineSetup({ setup, busy, onInstall }) {
+  const mb = setup.size ? `${Math.max(0.1, setup.size / 1048576).toFixed(1)} MB` : "";
+  return /* @__PURE__ */ jsxs("div", { className: "hv-panel", style: S.welcome, children: [
+    /* @__PURE__ */ jsx("strong", { style: { fontSize: 17 }, children: "One thing first" }),
+    /* @__PURE__ */ jsx("div", { children: "The village's rules run in a small engine that needs to be on this computer. It is only fetched when you press this." }),
+    setup.available ? /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsxs("div", { style: S.low, children: [
+        mb,
+        " from ",
+        setup.url?.split("/").slice(3, 5).join("/"),
+        " on GitHub, built from this plugin's public source and checked against a checksum pinned in the plugin."
+      ] }),
+      /* @__PURE__ */ jsx("div", { children: /* @__PURE__ */ jsx(Btn, { primary: true, disabled: busy, onClick: onInstall, children: busy ? "Downloading\u2026" : `Download engine \xB7 ${mb}` }) })
+    ] }) : /* @__PURE__ */ jsxs("div", { style: S.mid, children: [
+      "No build is published for this computer yet. With Rust installed, run ",
+      /* @__PURE__ */ jsx("code", { children: "cargo install --path engine-rs --locked" }),
+      " in the plugin folder, then come back here."
+    ] })
+  ] });
+}
 function savedSkin() {
   try {
     const value = localStorage.getItem("hermes-village.skin");
@@ -34401,6 +34758,15 @@ function VillagePage({ ctx, skin: startSkin }) {
   const boxRef = useRef(null);
   const sceneRef = useRef(null);
   const [legacy, setLegacy] = useState(null);
+  const [story, setStory] = useState([]);
+  const [setup, setSetup] = useState(null);
+  const [welcome, setWelcome] = useState(() => !remembered("hermes-village.welcomed"));
+  const [sound, setSound] = useState(() => remembered("hermes-village.sound") === "on");
+  const soundRef = useRef(null);
+  const miniCanvas = useRef(null);
+  const miniRef = useRef(null);
+  const selectedRef = useRef(null);
+  const cued = useRef("");
   const [tab, setTab] = useState(null);
   const [skin, setSkin] = useState(() => startSkin ?? savedSkin());
   const chooseSkin = (key) => {
@@ -34435,6 +34801,17 @@ function VillagePage({ ctx, skin: startSkin }) {
       liveSig.current = sig;
       setLive(next);
     }
+    miniRef.current?.draw(w, villagers, sceneRef.current?.lookingAt(), selectedRef.current);
+    soundRef.current?.tick({ phase: clock.phase, season: w.season, paused: !!w.paused_at });
+    if (clock.evening) {
+      const said = (w.current?.events ?? []).join("|");
+      const mark = `${w.day}:${said}`;
+      if (mark !== cued.current) {
+        cued.current = mark;
+        if (/died of/.test(said)) soundRef.current?.cue("death");
+        else if (/worked out|has begun/.test(said)) soundRef.current?.cue("learn");
+      }
+    }
   }, [getClock]);
   const apply = useCallback((res) => {
     if (!mounted.current || !res) return;
@@ -34447,14 +34824,27 @@ function VillagePage({ ctx, skin: startSkin }) {
     }
     if (res.budget) setBudget(res.budget);
     if (res.legacy) setLegacy(res.legacy);
+    if (res.chronicle) setStory(res.chronicle);
   }, [sampleLive]);
   const refresh = useCallback(async () => {
     lastFetch.current = Date.now();
     try {
       apply(await api.state(worldRef.current?.land_view?.rev));
-      if (mounted.current) setError("");
+      if (mounted.current) {
+        setError("");
+        setSetup(null);
+      }
     } catch (e) {
-      if (mounted.current) setError(errText(e));
+      if (!mounted.current) return;
+      const text = errText(e);
+      setError(text);
+      if (/village engine/i.test(text)) {
+        try {
+          const state = await api.engine();
+          if (mounted.current) setSetup(state);
+        } catch {
+        }
+      }
     }
   }, [api, apply]);
   const run = useCallback(async (label, fn) => {
@@ -34497,7 +34887,7 @@ function VillagePage({ ctx, skin: startSkin }) {
     if (!boxRef.current) return void 0;
     let sc;
     try {
-      sc = createScene(boxRef.current);
+      sc = createScene(boxRef.current, { onPick: (name) => setSelected((s) => s === name ? null : name) });
     } catch (e) {
       setError(`3D view unavailable: ${errText(e)}`);
       return void 0;
@@ -34513,8 +34903,65 @@ function VillagePage({ ctx, skin: startSkin }) {
     if (world) sceneRef.current?.setPlayback(world, getClock);
   }, [world, getClock]);
   useEffect(() => {
+    selectedRef.current = selected;
     sceneRef.current?.select(selected);
   }, [selected]);
+  useEffect(() => {
+    if (!miniCanvas.current) return void 0;
+    const mini = createMinimap(miniCanvas.current, (x, y) => sceneRef.current?.lookAt(x, y));
+    miniRef.current = mini;
+    return () => {
+      miniRef.current = null;
+      mini.dispose();
+    };
+  }, []);
+  useEffect(() => {
+    const s = createSound();
+    soundRef.current = s;
+    return () => {
+      soundRef.current = null;
+      s.dispose();
+    };
+  }, []);
+  useEffect(() => {
+    if (!sound) {
+      soundRef.current?.set(false);
+      return void 0;
+    }
+    const begin = () => soundRef.current?.set(true);
+    begin();
+    window.addEventListener("pointerdown", begin, { once: true });
+    return () => window.removeEventListener("pointerdown", begin);
+  }, [sound]);
+  const toggleSound = () => setSound((on) => {
+    remember("hermes-village.sound", on ? "off" : "on");
+    return !on;
+  });
+  const goHome = useCallback(() => {
+    const camp = worldRef.current?.camp;
+    if (camp) sceneRef.current?.lookAt(camp[0], camp[1]);
+  }, []);
+  useEffect(() => {
+    const onKey = (e) => {
+      const at = e.target;
+      if (e.ctrlKey || e.metaKey || e.altKey || at?.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(at?.tagName ?? "")) return;
+      if (!(at === document.body || boxRef.current?.closest(".hv")?.contains(at))) return;
+      const w = worldRef.current;
+      if (!w) return;
+      const go = (n) => void run("speed", () => api.speed(n));
+      if (e.code === "Space") go(w.paused_at ? w.speed : 0);
+      else if (/^Digit[1-5]$/.test(e.code) && w.speeds?.[Number(e.code.slice(5)) - 1]) go(w.speeds[Number(e.code.slice(5)) - 1]);
+      else if (e.key === "c" || e.key === "C") goHome();
+      else if (e.key === "f" || e.key === "F") sceneRef.current?.watch();
+      else if (e.key === "Escape") {
+        setTab(null);
+        setSelected(null);
+      } else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [api, run, goHome]);
   useEffect(() => {
     if (world && guideText === "") setGuideText(world.guidance ?? "");
   }, [world?.guidance]);
@@ -34542,6 +34989,18 @@ function VillagePage({ ctx, skin: startSkin }) {
       setHint("Press Enter in chat to let the villagers plan (uses model tokens)");
     } catch {
       setHint("Type /village plan in chat");
+    }
+  };
+  const installEngine = async () => {
+    setBusy("engine");
+    setError("");
+    try {
+      await api.installEngine();
+      await refresh();
+    } catch (e) {
+      if (mounted.current) setError(errText(e));
+    } finally {
+      if (mounted.current) setBusy("");
     }
   };
   const saveBudget = () => {
@@ -34578,7 +35037,7 @@ function VillagePage({ ctx, skin: startSkin }) {
         paused ? " \xB7 Paused" : ""
       ] }),
       /* @__PURE__ */ jsx(DayBar, { dayT: live?.dayT, wf }),
-      guide && /* @__PURE__ */ jsx("span", { style: { ...S.low, whiteSpace: "nowrap" }, children: guide.era }),
+      guide && /* @__PURE__ */ jsx("span", { className: "hv-w2", style: { ...S.low, whiteSpace: "nowrap" }, children: guide.era }),
       guide && /* @__PURE__ */ jsxs("span", { style: S.stat, title: "Earned as the village lives and learns. Spend it on ideas and upgrades.", children: [
         /* @__PURE__ */ jsx("strong", { style: { color: C.gold, fontSize: 15 }, children: guide.insight }),
         /* @__PURE__ */ jsx("span", { style: S.low, children: "Insight" })
@@ -34588,7 +35047,7 @@ function VillagePage({ ctx, skin: startSkin }) {
         /* @__PURE__ */ jsx("span", { style: S.low, children: "Trust" }),
         /* @__PURE__ */ jsx(Meter, { value: guide.trust, max: 100, width: 36, color: guide.trust < guide.trust_heeded ? C.red : C.gold })
       ] }),
-      /* @__PURE__ */ jsxs("span", { style: S.stat, title: lastCall?.model ? `Last council used ${lastCall.model}` : "Model tokens used today", children: [
+      /* @__PURE__ */ jsxs("span", { className: "hv-w1", style: S.stat, title: lastCall?.model ? `Last council used ${lastCall.model}` : "Model tokens used today", children: [
         /* @__PURE__ */ jsx("strong", { children: tokensLeft }),
         /* @__PURE__ */ jsxs("span", { style: S.low, children: [
           "tokens \xB7 ",
@@ -34598,16 +35057,19 @@ function VillagePage({ ctx, skin: startSkin }) {
         ] })
       ] })
     ] }),
-    /* @__PURE__ */ jsx(Resources, { res: world?.resources, people: (world?.villagers ?? []).filter((v) => !v.dying).length }),
-    /* @__PURE__ */ jsxs("div", { style: S.feed, children: [
-      dusk && (world?.current?.events ?? []).map((e) => /* @__PURE__ */ jsx("strong", { style: { color: C.gold }, children: e }, e)),
-      (live?.feed ?? []).slice(0, 3).map((f, i) => /* @__PURE__ */ jsxs("div", { style: { opacity: f.ok ? 0.95 - i * 0.2 : 0.6 }, children: [
-        /* @__PURE__ */ jsx("strong", { children: f.name }),
-        " ",
-        f.ok ? "" : "\u2717 ",
-        f.text
-      ] }, `${i}-${f.name}-${f.text}`))
+    /* @__PURE__ */ jsxs("div", { style: S.left, children: [
+      /* @__PURE__ */ jsx(Resources, { res: world?.resources, world, people: (world?.villagers ?? []).filter((v) => !v.dying).length }),
+      /* @__PURE__ */ jsxs("div", { style: S.feed, children: [
+        dusk && (world?.current?.events ?? []).map((e) => /* @__PURE__ */ jsx("strong", { style: { color: DARK.test(e) ? C.red : C.gold }, children: plain(e) }, e)),
+        (live?.feed ?? []).slice(0, 3).map((f, i) => /* @__PURE__ */ jsxs("div", { style: { opacity: f.ok ? 0.95 - i * 0.2 : 0.6 }, children: [
+          /* @__PURE__ */ jsx("strong", { children: f.name }),
+          " ",
+          f.ok ? "" : "\u2717 ",
+          feedText(f.text, world?.camp)
+        ] }, `${i}-${f.name}-${f.text}`))
+      ] })
     ] }),
+    /* @__PURE__ */ jsx("div", { className: "hv-panel hv-mini", style: { ...S.mini, display: tab ? "none" : void 0 }, title: "What they have seen. Click to look there.", children: /* @__PURE__ */ jsx("canvas", { ref: miniCanvas, width: MINIMAP_SIZE, height: MINIMAP_SIZE, style: { width: MINIMAP_SIZE, height: MINIMAP_SIZE, borderRadius: 6, cursor: "pointer" } }) }),
     /* @__PURE__ */ jsx("div", { className: "hv-panel", style: S.rail, children: TABS.map(([key, icon, label]) => /* @__PURE__ */ jsxs(
       "button",
       {
@@ -34633,7 +35095,7 @@ function VillagePage({ ctx, skin: startSkin }) {
         tab === "upgrades" && /* @__PURE__ */ jsx(UpgradesTab, { guide, idle, run, api }),
         tab === "legacy" && /* @__PURE__ */ jsx(LegacyTab, { legacy, idle, run, api }),
         tab === "build" && /* @__PURE__ */ jsx(BuildTab, { buildings: world?.buildings, built: world?.built }),
-        tab === "log" && /* @__PURE__ */ jsx(LogTab, { log: world?.log }),
+        tab === "story" && /* @__PURE__ */ jsx(StoryTab, { story: story.filter((n) => dusk || n.day < (world?.current?.day ?? Infinity)), log: world?.log }),
         tab === "speak" && /* @__PURE__ */ jsxs(Fragment, { children: [
           /* @__PURE__ */ jsx("div", { style: S.low, children: "Tell the villagers what you think. They hear it at the next council, and may disagree." }),
           /* @__PURE__ */ jsx("textarea", { style: S.input, value: guideText, onChange: (e) => setGuideText(e.target.value), placeholder: "Store food before winter\u2026", maxLength: 300, rows: 4 }),
@@ -34646,6 +35108,10 @@ function VillagePage({ ctx, skin: startSkin }) {
         tab === "settings" && /* @__PURE__ */ jsxs(Fragment, { children: [
           /* @__PURE__ */ jsx("div", { style: S.h, children: "Look" }),
           /* @__PURE__ */ jsx("div", { style: S.row, children: SKINS.map(([key, label]) => /* @__PURE__ */ jsx(Btn, { on: skin === key, onClick: () => chooseSkin(key), children: label }, key)) }),
+          /* @__PURE__ */ jsx("div", { style: S.h, children: "Sound" }),
+          /* @__PURE__ */ jsx("div", { children: /* @__PURE__ */ jsx(Btn, { on: sound, onClick: toggleSound, children: sound ? "Sound on" : "Sound off" }) }),
+          /* @__PURE__ */ jsx("div", { style: S.h, children: "Keys" }),
+          /* @__PURE__ */ jsx("div", { style: S.low, children: "Space pauses, 1 to 5 set the speed, C goes to camp, F follows, Esc closes." }),
           /* @__PURE__ */ jsx("div", { style: S.h, children: "Daily token limit" }),
           /* @__PURE__ */ jsxs("div", { style: S.row, children: [
             /* @__PURE__ */ jsx("input", { type: "number", min: "0", step: "1000", style: S.input, value: budgetText, onChange: (e) => setBudgetText(e.target.value) }),
@@ -34669,13 +35135,25 @@ function VillagePage({ ctx, skin: startSkin }) {
       ] })
     ] }),
     shown && !(shown.dying && dusk) && /* @__PURE__ */ jsx(PersonCard, { v: shown, live: live?.villagers?.[shown.name], maxHealth: world?.max_health ?? 5, onClose: () => setSelected(null) }),
-    world?.fallen && dusk && /* @__PURE__ */ jsxs("div", { className: "hv-panel", style: S.notice, children: [
-      /* @__PURE__ */ jsxs("div", { children: [
-        /* @__PURE__ */ jsx("strong", { children: "The village has fallen." }),
-        " Everyone was gone by day ",
+    world?.fallen && dusk && /* @__PURE__ */ jsxs("div", { className: "hv-panel", style: S.welcome, children: [
+      /* @__PURE__ */ jsx("strong", { style: { fontSize: 17 }, children: "The village has fallen." }),
+      /* @__PURE__ */ jsxs("div", { style: S.mid, children: [
+        world.settlement ?? "The camp",
+        " lasted ",
         world.fallen,
+        " ",
+        world.fallen === 1 ? "day" : "days",
+        " and never got past the ",
+        guide?.era ?? "Stone Age",
         "."
       ] }),
+      /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto" }, children: story.map((n, i) => /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 8 }, children: [
+        /* @__PURE__ */ jsxs("span", { style: { ...S.low, flex: "0 0 48px" }, children: [
+          "Day ",
+          n.day
+        ] }),
+        /* @__PURE__ */ jsx("span", { style: { color: DARK.test(n.text) ? C.red : C.text }, children: n.text })
+      ] }, `${n.day}-${i}`)) }),
       /* @__PURE__ */ jsx("div", { children: /* @__PURE__ */ jsxs(Btn, { primary: true, disabled: idle, onClick: () => {
         setSelected(null);
         setGuideText("");
@@ -34696,7 +35174,7 @@ function VillagePage({ ctx, skin: startSkin }) {
         fmtItems(away.gained) && /* @__PURE__ */ jsx("div", { style: S.mid, children: fmtItems(away.gained) }),
         (away.built ?? []).length > 0 && /* @__PURE__ */ jsxs("div", { style: S.mid, children: [
           "Built ",
-          away.built.join(", ").replace(/_/g, " ")
+          plain(away.built.join(", "))
         ] }),
         (away.deaths ?? []).map((d) => /* @__PURE__ */ jsxs("div", { style: { color: C.red }, children: [
           d.name,
@@ -34706,7 +35184,12 @@ function VillagePage({ ctx, skin: startSkin }) {
       ] }),
       /* @__PURE__ */ jsx("div", { children: /* @__PURE__ */ jsx(Btn, { disabled: idle, onClick: () => void run("ack", api.ack), children: "OK" }) })
     ] }),
-    (error2 || hint) && /* @__PURE__ */ jsx("div", { role: "alert", className: "hv-panel", style: { ...S.notice, top: "auto", bottom: DOCK + 16, borderColor: error2 ? C.red : C.line }, children: error2 || hint }),
+    setup && /* @__PURE__ */ jsx(EngineSetup, { setup, busy: busy === "engine", onInstall: () => void installEngine() }),
+    welcome && world && !setup && /* @__PURE__ */ jsx(Welcome, { onBegin: () => {
+      setWelcome(false);
+      remember("hermes-village.welcomed", "1");
+    } }),
+    (error2 || hint) && !setup && /* @__PURE__ */ jsx("div", { role: "alert", className: "hv-panel", style: { ...S.notice, top: "auto", bottom: DOCK + 16, borderColor: error2 ? C.red : C.line }, children: error2 || hint }),
     /* @__PURE__ */ jsxs("div", { className: "hv-panel", style: S.dock, children: [
       /* @__PURE__ */ jsx("div", { style: S.people, children: (world?.villagers ?? []).map((v) => /* @__PURE__ */ jsx(
         Person,
@@ -34721,27 +35204,32 @@ function VillagePage({ ctx, skin: startSkin }) {
         v.name
       )) }),
       /* @__PURE__ */ jsxs("div", { style: S.bar, children: [
-        /* @__PURE__ */ jsx("span", { style: S.h, children: "Focus" }),
+        /* @__PURE__ */ jsx("span", { className: "hv-w1", style: S.h, children: "Focus" }),
         guide && Object.entries(guide.focuses).map(([key, text]) => /* @__PURE__ */ jsx(
           Btn,
           {
             on: guide.focus === key,
-            disabled: idle,
+            disabled: idle || !!world?.fallen,
             title: `Urge them to ${text}. Judged every ${guide.focus_days} days.`,
             onClick: () => void run("focus", () => api.focus(guide.focus === key ? null : key)),
             children: key[0].toUpperCase() + key.slice(1)
           },
           key
         )),
-        /* @__PURE__ */ jsx("span", { style: { ...S.h, marginLeft: "auto" }, children: "Speed" }),
+        /* @__PURE__ */ jsx("span", { style: { flex: 1 } }),
+        /* @__PURE__ */ jsx("span", { className: "hv-w1", style: S.h, children: "Speed" }),
         /* @__PURE__ */ jsx(Btn, { on: paused, disabled: planning, title: "Pause", "aria-label": "Pause", onClick: () => void run("speed", () => api.speed(paused ? world.speed : 0)), children: "\u275A\u275A" }),
-        (world?.speeds ?? []).map((n) => /* @__PURE__ */ jsxs(Btn, { on: !paused && world?.speed === n, disabled: planning, onClick: () => void run("speed", () => api.speed(n)), children: [
+        (world?.speeds ?? []).map((n) => /* @__PURE__ */ jsxs(Btn, { className: n === 2 || n === 8 ? "hv-w2" : "", on: !paused && world?.speed === n, disabled: planning, onClick: () => void run("speed", () => api.speed(n)), children: [
           n,
           "x"
         ] }, n)),
-        /* @__PURE__ */ jsx(Btn, { title: "Camera follows the group", onClick: () => sceneRef.current?.watch(), children: "Follow" }),
-        /* @__PURE__ */ jsxs(Btn, { primary: true, disabled: !budget?.can_plan || idle || planning || world?.council_ready, title: world?.council_ready ? "The council has decided. Its plans start at dawn." : reasons.length ? reasons.join("; ") : "One model call plans everyone's next day", onClick: () => void planDay(), children: [
-          planning ? "Council meeting\u2026" : world?.council_ready ? "Plans set for dawn" : `Hold council${estLabel}`,
+        /* @__PURE__ */ jsx(Btn, { className: "hv-w1", title: "Look at the camp (C)", onClick: goHome, children: "Camp" }),
+        /* @__PURE__ */ jsx(Btn, { className: "hv-w1", title: "Camera follows the group (F)", onClick: () => sceneRef.current?.watch(), children: "Follow" }),
+        /* @__PURE__ */ jsxs(Btn, { primary: true, disabled: !budget?.can_plan || idle || planning || world?.council_ready || !!world?.fallen, title: world?.council_ready ? "The council has decided. Its plans start at dawn." : reasons.length ? reasons.join("; ") : "One model call plans everyone's next day", onClick: () => void planDay(), children: [
+          planning ? "Council meeting\u2026" : world?.council_ready ? "Plans set for dawn" : /* @__PURE__ */ jsxs(Fragment, { children: [
+            "Hold council",
+            /* @__PURE__ */ jsx("span", { className: "hv-w1", children: estLabel })
+          ] }),
           reasons.length && !world?.council_ready ? " \u2022" : ""
         ] })
       ] })
@@ -34754,7 +35242,7 @@ import { jsx as jsx2 } from "react/jsx-runtime";
 var PATH = "/hermes-village";
 var plugin_default = {
   id: "hermes-village",
-  name: "Hermes Village",
+  name: "Hermes Incremental Village",
   register(ctx) {
     ctx.registerMany([
       { id: "page", area: ROUTES_AREA, title: "Village", data: { path: PATH }, render: () => /* @__PURE__ */ jsx2(VillagePage, { ctx }) },

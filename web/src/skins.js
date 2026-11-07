@@ -14,6 +14,10 @@ import goldButtonDown from 'rpgui/img/button-golden-down.png'
 import playFont from 'psone.css/fonts/Play-Regular.woff'
 
 export const SKIN_CSS = `
+.hv { container-type: size; }
+@container (max-height: 590px) { .hv-mini { display: none; } }
+@container (max-width: 920px) { .hv-w1 { display: none !important; } }
+@container (max-width: 700px) { .hv-w2 { display: none !important; } .hv .hv-btn { padding: 5px 5px !important; font-size: 11px !important; } }
 @font-face { font-family: 'HV Play'; src: url(${playFont}) format('woff'); }
 
 .hv[data-skin="wood"] { --hv-mid: #cdbb9b; --hv-low: #a08d71; font-family: ui-monospace, Consolas, monospace; }
