@@ -1,0 +1,16 @@
+{
+  "name": "hermes-village-web",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node check-imports.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "psone.css": "github:micah5/PSone.css",
+    "rpgui": "^1.0.3",
+    "three": "0.187.0"
+  }
+}

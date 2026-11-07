@@ -1,0 +1,438 @@
+{
+ "SCHEMA_VERSION": 10,
+ "DAY_SECONDS": 120,
+ "DAWN_FRACTION": 0.1,
+ "WALK_PER_SLOT": 3,
+ "HOME_REACH": 12,
+ "WORK_FRACTION": 0.8,
+ "MAX_CATCHUP_DAYS": 30,
+ "SPEEDS": [
+  1,
+  2,
+  4,
+  8,
+  16
+ ],
+ "SPEED_IDLE_SECONDS": 30,
+ "CHUNK": 16,
+ "CAMP_CLEARING": 3,
+ "CAMP_WATER": 6,
+ "CLIMATE_PULL": 0.3,
+ "WATER_BELOW": 0.337,
+ "ROCK_ABOVE": 0.684,
+ "FOREST_ABOVE": 0.562,
+ "BERRIES_ABOVE": 0.77,
+ "SEARCH_REACH": 40,
+ "SLOTS_PER_DAY": 8,
+ "VISION": 4,
+ "TALK_RANGE": 2,
+ "MAX_ACTIONS": 6,
+ "MAX_ENERGY": 10,
+ "OVERNIGHT_ENERGY": 4,
+ "HUNGRY_ENERGY": 2,
+ "MEMORY_LINES": 4,
+ "HEARD_LINES": 3,
+ "MAX_VILLAGERS": 6,
+ "MAX_HEALTH": 5,
+ "SEASON_DAYS": 5,
+ "SEASONS": [
+  "spring",
+  "summer",
+  "autumn",
+  "winter"
+ ],
+ "BUSH_FOOD": 4,
+ "TREE_WOOD": 3,
+ "TREE_REGROW_DAYS": 6,
+ "SEEDING_CHANCE": 0.4,
+ "WOODLOT_GROW_DAYS": 4,
+ "CARRY_LIMIT": 12,
+ "PACK_FRAME_BONUS": 6,
+ "WEIGHTS": {
+  "stone": 2
+ },
+ "STORE_REACH": 2,
+ "BUILD_REACH": 5,
+ "FIRE_FUEL_REACH": 6,
+ "WATER_RANGE": 7,
+ "SOIL_LOSS": 0.12,
+ "SOIL_REST": 0.03,
+ "EDIBLE": [
+  "meat",
+  "food",
+  "grain"
+ ],
+ "HUNT_REACH": 2,
+ "HUNT_SLOTS": 3,
+ "MEAT_PER_KILL": 6,
+ "GORE_DAMAGE": 2,
+ "HERD_LIMIT": 6,
+ "HERD_CHANCE": 0.67,
+ "ANIMALS": {
+  "deer": {
+   "odds": 0.55,
+   "gore": 0.0
+  },
+  "boar": {
+   "odds": 0.45,
+   "gore": 0.25
+  }
+ },
+ "BUSH_REGROW_DAYS": 3,
+ "FIELD_FOOD": 8,
+ "FIELD_GROWTH": 2,
+ "ROT_SHARE": 4,
+ "ROT_BY_ITEM": {
+  "meat": 2,
+  "food": 4
+ },
+ "SHELTER_RANGE": 5,
+ "WOLF_CHANCE": 0.05,
+ "WOLF_BITE": 2,
+ "EMPTIED_FOR_FARMING": 4,
+ "FIELD_WATER_RANGE": 3,
+ "START_TRUST": 50,
+ "TRUST_HEEDED": 40,
+ "TRUST_EAGER": 70,
+ "FOCUS_DAYS": 5,
+ "EXPERIMENT_SLOTS": 3,
+ "FOCUSES": {
+  "food": "keep everyone fed",
+  "shelter": "build homes",
+  "explore": "see what is out there",
+  "learn": "try the new ideas"
+ },
+ "IDEAS": {
+  "coppicing": {
+   "name": "Coppicing",
+   "era": "Stone Age",
+   "cost": 4,
+   "needs": [],
+   "try": {
+    "wood": 1
+   },
+   "near": null,
+   "skill": null,
+   "hint": "a cut tree sends up new shoots from its stump if it is left to grow",
+   "unlocks": "woodlots",
+   "history": "Tended woodland was cut in rotation for thousands of years."
+  },
+  "sowing": {
+   "name": "Sowing",
+   "era": "Stone Age",
+   "cost": 5,
+   "needs": [],
+   "try": {
+    "food": 1
+   },
+   "near": "water",
+   "skill": "farming",
+   "hint": "seeds dropped in damp ground come up where you left them",
+   "unlocks": "fields",
+   "history": "Farming began about 12,000 years ago."
+  },
+  "pottery": {
+   "name": "Pottery",
+   "era": "Farming Age",
+   "cost": 7,
+   "needs": [
+    "sowing"
+   ],
+   "try": {
+    "wood": 1
+   },
+   "near": "fire",
+   "skill": null,
+   "hint": "wet clay hardens in a hot fire, and a sealed pot keeps food from spoiling",
+   "unlocks": "storehouse",
+   "history": "Fired clay pots are older than farming in parts of Asia."
+  },
+  "masonry": {
+   "name": "Masonry",
+   "era": "Farming Age",
+   "cost": 9,
+   "needs": [
+    "pottery"
+   ],
+   "try": {
+    "stone": 2
+   },
+   "near": null,
+   "skill": null,
+   "hint": "stones stacked with care make walls that outlast wood",
+   "unlocks": "stone house",
+   "history": "Stone settlements followed the first farms."
+  },
+  "copper": {
+   "name": "Copper",
+   "era": "Copper Age",
+   "cost": 14,
+   "needs": [
+    "pottery"
+   ],
+   "try": {
+    "stone": 2,
+    "wood": 2
+   },
+   "near": "fire",
+   "skill": null,
+   "hint": "green stones melt in a fierce fire, and the metal holds an edge",
+   "unlocks": "metal tools: 1 more wood or stone per gather",
+   "history": "Pottery kilns gave people the heat that smelting needs."
+  }
+ },
+ "FUTURE_ERAS": [
+  "Bronze",
+  "Iron",
+  "Writing",
+  "Steam",
+  "Steel",
+  "Flight"
+ ],
+ "UPGRADES": {
+  "long_memory": {
+   "name": "Long memory",
+   "cost": 4,
+   "effect": "villagers keep 2 more notes"
+  },
+  "patient_teaching": {
+   "name": "Patient teaching",
+   "cost": 5,
+   "effect": "teaching takes half the time"
+  },
+  "pack_frames": {
+   "name": "Pack frames",
+   "cost": 6,
+   "effect": "villagers carry 6 more"
+  },
+  "keen_eyes": {
+   "name": "Keen eyes",
+   "cost": 6,
+   "effect": "villagers see 1 tile further"
+  },
+  "hardy": {
+   "name": "Hardy bodies",
+   "cost": 8,
+   "effect": "1 more health"
+  }
+ },
+ "PERKS": {
+  "full_packs": {
+   "name": "Full packs",
+   "cost": 2,
+   "effect": "new villages start with 2 extra food each"
+  },
+  "first_trust": {
+   "name": "Old friends",
+   "cost": 2,
+   "effect": "new villages start at 65 Trust"
+  },
+  "old_songs": {
+   "name": "Old songs",
+   "cost": 3,
+   "effect": "new villages start with 5 Insight"
+  },
+  "seed_memory": {
+   "name": "Seed memory",
+   "cost": 6,
+   "effect": "new villages already know sowing"
+  }
+ },
+ "WANDERERS": [
+  "Dara",
+  "Ewan",
+  "Fenn",
+  "Gwen",
+  "Hale",
+  "Ivo",
+  "Juno",
+  "Kell",
+  "Lorn",
+  "Mira",
+  "Nell",
+  "Odo"
+ ],
+ "TERRAIN": [
+  "grass",
+  "forest",
+  "rock",
+  "berries",
+  "water"
+ ],
+ "TILE_CHARS": {
+  "grass": ".",
+  "forest": "T",
+  "rock": "R",
+  "berries": "b",
+  "water": "~"
+ },
+ "YIELD": {
+  "forest": "wood",
+  "rock": "stone",
+  "berries": "food",
+  "water": "water"
+ },
+ "ITEMS": [
+  "wood",
+  "stone",
+  "food",
+  "grain",
+  "meat",
+  "water"
+ ],
+ "SKILLS": [
+  "firemaking",
+  "weaving",
+  "foraging",
+  "farming"
+ ],
+ "BUILDINGS": {
+  "lean_to": {
+   "cost": {
+    "wood": 4
+   },
+   "skill": null,
+   "slots": 3,
+   "max": 6,
+   "rest": 1,
+   "effect": "everyone recovers 1 more energy overnight"
+  },
+  "fire_pit": {
+   "cost": {
+    "stone": 3,
+    "wood": 1
+   },
+   "skill": "firemaking",
+   "slots": 2,
+   "max": 4,
+   "rest": 1,
+   "effect": "everyone recovers 1 more energy overnight"
+  },
+  "drying_rack": {
+   "cost": {
+    "wood": 3
+   },
+   "skill": "weaving",
+   "slots": 3,
+   "max": 1,
+   "food": 1,
+   "effect": "gathering food yields 1 more, and carried food stops rotting"
+  },
+  "field": {
+   "cost": {
+    "wood": 2
+   },
+   "skill": "farming",
+   "slots": 2,
+   "max": 4,
+   "near_water": 3,
+   "effect": "grows grain, which keeps all winter; must be near water, and tires if never rested"
+  },
+  "woodlot": {
+   "cost": {
+    "wood": 2
+   },
+   "skill": null,
+   "idea": "coppicing",
+   "slots": 2,
+   "max": 4,
+   "effect": "tended stumps give back 1 wood every 4 days"
+  },
+  "depot": {
+   "cost": {
+    "wood": 2
+   },
+   "skill": null,
+   "slots": 2,
+   "max": 8,
+   "effect": "a cache far from camp: store goods here instead of hauling them all the way back"
+  },
+  "hut": {
+   "cost": {
+    "wood": 6,
+    "stone": 2
+   },
+   "skill": null,
+   "slots": 4,
+   "max": 6,
+   "effect": "a proper home with 2 beds; raises the settlement"
+  },
+  "storehouse": {
+   "cost": {
+    "wood": 4,
+    "stone": 2
+   },
+   "skill": null,
+   "idea": "pottery",
+   "slots": 3,
+   "max": 1,
+   "effect": "food stops rotting for anyone sleeping within 5 tiles"
+  },
+  "stone_house": {
+   "cost": {
+    "stone": 6,
+    "wood": 2
+   },
+   "skill": null,
+   "idea": "masonry",
+   "slots": 5,
+   "max": 3,
+   "effect": "a lasting home with 3 beds"
+  }
+ },
+ "LEVELS": [
+  [
+   0,
+   "Camp"
+  ],
+  [
+   2,
+   "Hamlet"
+  ],
+  [
+   4,
+   "Village"
+  ]
+ ],
+ "VERBS": [
+  "look",
+  "walk",
+  "gather",
+  "build",
+  "talk",
+  "trade",
+  "teach",
+  "rest",
+  "experiment",
+  "deposit",
+  "take",
+  "hunt"
+ ],
+ "STARTING_VILLAGERS": [
+  {
+   "name": "Ash",
+   "skills": [
+    "firemaking"
+   ],
+   "trait": "cautious, protective of the group"
+  },
+  {
+   "name": "Bryn",
+   "skills": [
+    "weaving"
+   ],
+   "trait": "curious, wanders to see what is over the hill"
+  },
+  {
+   "name": "Coll",
+   "skills": [
+    "foraging"
+   ],
+   "trait": "practical, hungry, a little stubborn"
+  }
+ ],
+ "FULL_STOCK": {
+  "berries": 4,
+  "forest": 3
+ }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "hermes-village",
+  "label": "Village",
+  "description": "Backend routes for the Hermes Village Desktop page.",
+  "version": "0.10.0",
+  "api": "plugin_api.py",
+  "tab": {
+    "hidden": true
+  }
+}
