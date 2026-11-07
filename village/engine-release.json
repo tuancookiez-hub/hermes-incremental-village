@@ -1,5 +1,31 @@
 {
   "version": "0.10.0",
   "repo": "tuancookiez-hub/hermes-incremental-village",
-  "assets": {}
+  "assets": {
+    "linux-aarch64": {
+      "file": "hermes-village-engine-0.10.0-linux-aarch64",
+      "sha256": "833f763d45ebc18cecdcae5cea40f5f961701d148f46200ee6f6cc41b071d1a5",
+      "size": 1225712
+    },
+    "linux-x86_64": {
+      "file": "hermes-village-engine-0.10.0-linux-x86_64",
+      "sha256": "85c29b46b7144bfbd8e971ce5c5761f47ccce9fed6245d29e9e45e14fe3d1224",
+      "size": 1333768
+    },
+    "macos-aarch64": {
+      "file": "hermes-village-engine-0.10.0-macos-aarch64",
+      "sha256": "facd9d183f7dac60fb8a36720d6b43cce5741984c103974f15afe27f61958797",
+      "size": 1039424
+    },
+    "macos-x86_64": {
+      "file": "hermes-village-engine-0.10.0-macos-x86_64",
+      "sha256": "7090ae07c2d2cc45a686bc00670b37e6720435b682e92d20f7e6937a4bafb6be",
+      "size": 1139576
+    },
+    "windows-x86_64": {
+      "file": "hermes-village-engine-0.10.0-windows-x86_64.exe",
+      "sha256": "221b2aa1e3bad3ce1d72822e7c93078d1f0390a6524b3ec925550e3a838c06b4",
+      "size": 1074688
+    }
+  }
 }
