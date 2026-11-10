@@ -1,5 +1,5 @@
-Third-party software in the Rust engine (engine-rs), compiled into the engine builds on this
-project's GitHub releases, or built from crates.io on your machine if you use cargo: serde, serde_derive, serde_json, sha2, and their dependencies, listed with exact versions
+Third-party software in the optional Rust engine (engine-rs), which this plugin does not bundle or
+download: serde, serde_derive, serde_json, sha2, and their dependencies, listed with exact versions
 in engine-rs/Cargo.lock. Each is available under its own MIT, Apache-2.0 or Unicode license, shown
 on its crates.io page.
 

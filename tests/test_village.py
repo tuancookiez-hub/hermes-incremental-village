@@ -1122,6 +1122,7 @@ def test_clock_moving_during_a_call_does_not_waste_the_plan(store, clock):
         def complete_structured(self, **kw):
             clock.t += engine.DAY_SECONDS * 3
             return super().complete_structured(**kw)
+    service.reset(store, 42)  # a world where Ash, the only one GOOD plans for, lives through these days
     out = service.plan_day(store, Slow(GOOD))
     assert out["world"]["council_ready"]
     clock.t += engine.DAY_SECONDS

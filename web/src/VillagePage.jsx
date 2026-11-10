@@ -17,7 +17,7 @@ const C = {
 const line = { borderWidth: 1, borderStyle: 'solid', borderColor: C.line }
 const glass = { background: C.glass, backdropFilter: 'blur(10px)', ...line, borderRadius: 10 }
 const TOP = 46
-const DOCK = 130
+const DOCK = 46
 const RAIL = 62
 
 const S = {
@@ -28,10 +28,9 @@ const S = {
   rail: { ...glass, position: 'absolute', top: TOP + 16, right: 8, width: RAIL, boxSizing: 'border-box', padding: 4, display: 'flex', flexDirection: 'column', gap: 2 },
   drawer: { ...glass, position: 'absolute', top: TOP + 16, right: RAIL + 16, bottom: DOCK + 16, width: 300, maxWidth: 'calc(100% - 100px)', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' },
   drawerBody: { flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 12px 12px', display: 'flex', flexDirection: 'column', gap: 10 },
-  dock: { ...glass, position: 'absolute', left: 8, right: 8, bottom: 8, height: DOCK, boxSizing: 'border-box', padding: 8, display: 'flex', flexDirection: 'column', gap: 8 },
-  people: { display: 'flex', gap: 6, flex: 1, minHeight: 0 },
-  person: { flex: '1 1 0', minWidth: 0, background: C.raised, ...line, borderRadius: 8, padding: '5px 8px', color: C.text, font: 'inherit', textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 1 },
-  bar: { display: 'flex', alignItems: 'center', gap: 6 },
+  dock: { ...glass, position: 'absolute', left: 8, right: 8, bottom: 8, height: DOCK, boxSizing: 'border-box', padding: '0 8px', display: 'flex', alignItems: 'center' },
+  person: { width: '100%', minHeight: 40, boxSizing: 'border-box', background: C.raised, ...line, borderRadius: 8, padding: '5px 8px', color: C.text, font: 'inherit', textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 1 },
+  bar: { display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 },
   clip: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   h: { fontSize: 11, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', color: C.low },
   mid: { color: C.mid },
@@ -114,6 +113,37 @@ function PersonCard({ v, live, maxHealth, onClose }) {
       {(v.skills ?? []).length > 0 && <div style={S.low}>Knows {v.skills.join(', ')}</div>}
       {(v.feedback ?? []).slice(0, 3).map((f, i) => <div key={i} style={S.low}>{f}</div>)}
     </div>
+  )
+}
+
+// What everyone is doing, counted: the first word of each villager's current activity.
+function activity(doing) {
+  const word = String(doing ?? 'Idle').split(' ')[0]
+  return word === "Can't" ? 'Stuck' : word
+}
+
+function PeopleTab({ world, live, selected, onPick, dusk }) {
+  const everyone = world?.villagers ?? []
+  const alive = everyone.filter(v => !v.dying)
+  const hungry = alive.filter(v => v.hungry > 0).length
+  const counts = {}
+  for (const v of alive) {
+    const what = activity(live?.villagers?.[v.name]?.doing)
+    counts[what] = (counts[what] ?? 0) + 1
+  }
+  return (
+    <>
+      <div style={S.mid}>
+        <strong style={{ color: C.text, fontSize: 15 }}>{alive.length}</strong> {alive.length === 1 ? 'person' : 'people'}
+        {hungry > 0 && <span style={{ color: C.red }}> · {hungry} hungry</span>}
+      </div>
+      {alive.length > 0 && <div style={S.low}>{Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(' · ')}</div>}
+      <div style={S.h}>Villagers</div>
+      {everyone.map(v => (
+        <Person key={v.name} v={v} live={live?.villagers?.[v.name]} selected={selected === v.name} onSelect={onPick}
+          gone={!!v.dying && dusk} maxHealth={world?.max_health ?? 5} />
+      ))}
+    </>
   )
 }
 
@@ -286,7 +316,7 @@ function Resources({ res, people, world }) {
   )
 }
 
-const TABS = [['ideas', '✦', 'Ideas'], ['upgrades', '▲', 'Upgrades'], ['legacy', '◆', 'Legacy'], ['build', '⌂', 'Build'], ['speak', '✎', 'Speak'], ['story', '≡', 'Story'], ['settings', '⚙', 'Settings']]
+const TABS = [['people', '☺', 'People'], ['ideas', '✦', 'Ideas'], ['upgrades', '▲', 'Upgrades'], ['legacy', '◆', 'Legacy'], ['build', '⌂', 'Build'], ['speak', '✎', 'Speak'], ['story', '≡', 'Story'], ['settings', '⚙', 'Settings']]
 
 const SKINS = [['ps1', 'PS1 blue'], ['wood', 'RPG wood']]
 
@@ -308,24 +338,6 @@ function Welcome({ onBegin }) {
       <div style={S.mid}><strong style={{ color: C.text }}>Hold council</strong> makes one model call: they plan tomorrow themselves and you see what they chose.</div>
       <div style={S.mid}>Everything is limited and winter kills. The land has no edge and starts dark, so what they need next is always further away.</div>
       <div><Btn primary onClick={onBegin}>Begin</Btn></div>
-    </div>
-  )
-}
-
-function EngineSetup({ setup, busy, onInstall }) {
-  const mb = setup.size ? `${Math.max(0.1, setup.size / 1048576).toFixed(1)} MB` : ''
-  return (
-    <div className="hv-panel" style={S.welcome}>
-      <strong style={{ fontSize: 17 }}>One thing first</strong>
-      <div>The village's rules run in a small engine that needs to be on this computer. It is only fetched when you press this.</div>
-      {setup.available ? (
-        <>
-          <div style={S.low}>{mb} from {setup.url?.split('/').slice(3, 5).join('/')} on GitHub, built from this plugin's public source and checked against a checksum pinned in the plugin.</div>
-          <div><Btn primary disabled={busy} onClick={onInstall}>{busy ? 'Downloading…' : `Download engine · ${mb}`}</Btn></div>
-        </>
-      ) : (
-        <div style={S.mid}>No build is published for this computer yet. With Rust installed, run <code>cargo install --path engine-rs --locked</code> in the plugin folder, then come back here.</div>
-      )}
     </div>
   )
 }
@@ -354,7 +366,6 @@ export function VillagePage({ ctx, skin: startSkin }) {
   const sceneRef = useRef(null)
   const [legacy, setLegacy] = useState(null)
   const [story, setStory] = useState([])
-  const [setup, setSetup] = useState(null)
   const [welcome, setWelcome] = useState(() => !remembered('hermes-village.welcomed'))
   const [sound, setSound] = useState(() => remembered('hermes-village.sound') === 'on')
   const soundRef = useRef(null)
@@ -426,15 +437,9 @@ export function VillagePage({ ctx, skin: startSkin }) {
     lastFetch.current = Date.now()
     try {
       apply(await api.state(worldRef.current?.land_view?.rev))
-      if (mounted.current) { setError(''); setSetup(null) }
+      if (mounted.current) setError('')
     } catch (e) {
-      if (!mounted.current) return
-      const text = errText(e)
-      setError(text)
-      // an engine that is missing or out of date gets a button, not a command to go and find
-      if (/village engine/i.test(text)) {
-        try { const state = await api.engine(); if (mounted.current) setSetup(state) } catch { /* the error above still shows */ }
-      }
+      if (mounted.current) setError(errText(e))
     }
   }, [api, apply])
 
@@ -539,6 +544,7 @@ export function VillagePage({ ctx, skin: startSkin }) {
       else if (/^Digit[1-5]$/.test(e.code) && w.speeds?.[Number(e.code.slice(5)) - 1]) go(w.speeds[Number(e.code.slice(5)) - 1])
       else if (e.key === 'c' || e.key === 'C') goHome()
       else if (e.key === 'f' || e.key === 'F') sceneRef.current?.watch()
+      else if (e.key === 'p' || e.key === 'P') setTab(t => (t === 'people' ? null : 'people'))
       else if (e.key === 'Escape') { setTab(null); setSelected(null) }
       else return
       e.preventDefault()
@@ -551,6 +557,13 @@ export function VillagePage({ ctx, skin: startSkin }) {
   useEffect(() => { if (budget) setBudgetText(String(budget.daily_tokens)) }, [budget?.daily_tokens]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSelect = name => setSelected(s => (s === name ? null : name))
+  const pickFromList = name => {
+    if (selected !== name) {
+      const at = live?.villagers?.[name]
+      if (at) sceneRef.current?.lookAt(at.x, at.y)
+    }
+    onSelect(name)
+  }
 
   const planDay = async () => {
     setHint('')
@@ -575,19 +588,6 @@ export function VillagePage({ ctx, skin: startSkin }) {
     }
   }
 
-  const installEngine = async () => {
-    setBusy('engine')
-    setError('')
-    try {
-      await api.installEngine()
-      await refresh()
-    } catch (e) {
-      if (mounted.current) setError(errText(e))
-    } finally {
-      if (mounted.current) setBusy('')
-    }
-  }
-
   const saveBudget = () => {
     const n = Math.round(Number(budgetText))
     if (!Number.isFinite(n) || n < 0) { setError('Enter a non-negative number of tokens'); return }
@@ -609,6 +609,8 @@ export function VillagePage({ ctx, skin: startSkin }) {
   const shown = (world?.villagers ?? []).find(v => v.name === selected)
   const dusk = !!live?.evening
   const paused = !!world?.paused_at
+  const alive = (world?.villagers ?? []).filter(v => !v.dying)
+  const hungry = alive.filter(v => v.hungry > 0).length
   const affordable = guide ? Object.entries(guide.ideas).some(([k, i]) => !guide.planted.includes(k) && i.needs.every(n => guide.known.includes(n)) && guide.insight >= i.cost) : false
 
   return (
@@ -618,8 +620,14 @@ export function VillagePage({ ctx, skin: startSkin }) {
 
       <div className="hv-panel" style={S.top}>
         <strong style={{ fontSize: 15, whiteSpace: 'nowrap' }}>{world ? `${world.settlement ?? 'Camp'} · Day ${world.day ?? '-'}` : 'Loading…'}</strong>
-        <span style={{ ...S.low, whiteSpace: 'nowrap' }}>{spd}{live?.phase ? ` · ${live.phase}` : ''}{paused ? ' · Paused' : ''}</span>
+        <span className="hv-w3" style={{ ...S.low, whiteSpace: 'nowrap' }}>{spd}{live?.phase ? ` · ${live.phase}` : ''}{paused ? ' · Paused' : ''}</span>
         <DayBar dayT={live?.dayT} wf={wf} />
+        {world && (
+          <button type="button" onClick={() => setTab(t => (t === 'people' ? null : 'people'))} title={hungry ? `${hungry} going hungry. Open People (P)` : 'Open People (P)'}
+            style={{ ...S.stat, background: 'none', border: 0, padding: 0, color: C.text, font: 'inherit', cursor: 'pointer' }}>
+            <strong style={{ fontSize: 15, color: hungry ? C.red : C.text }}>{alive.length}</strong><span className="hv-w2" style={S.low}>{alive.length === 1 ? 'person' : 'people'}</span>
+          </button>
+        )}
         {guide && <span className="hv-w2" style={{ ...S.low, whiteSpace: 'nowrap' }}>{guide.era}</span>}
         {guide && <span style={S.stat} title="Earned as the village lives and learns. Spend it on ideas and upgrades."><strong style={{ color: C.gold, fontSize: 15 }}>{guide.insight}</strong><span style={S.low}>Insight</span></span>}
         {guide && (
@@ -631,7 +639,7 @@ export function VillagePage({ ctx, skin: startSkin }) {
       </div>
 
       <div style={S.left}>
-        <Resources res={world?.resources} world={world} people={(world?.villagers ?? []).filter(v => !v.dying).length} />
+        <Resources res={world?.resources} world={world} people={alive.length} />
         <div style={S.feed}>
           {dusk && (world?.current?.events ?? []).map(e => <strong key={e} style={{ color: DARK.test(e) ? C.red : C.gold }}>{plain(e)}</strong>)}
           {(live?.feed ?? []).slice(0, 3).map((f, i) => (
@@ -650,6 +658,7 @@ export function VillagePage({ ctx, skin: startSkin }) {
             style={{ position: 'relative', background: tab === key ? 'rgba(230, 180, 80, 0.16)' : 'none', color: tab === key ? C.gold : C.mid, border: 0, borderRadius: 7, padding: '6px 0 5px', cursor: 'pointer', font: 'inherit', fontSize: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
             <span style={{ fontSize: 15, lineHeight: 1 }}>{icon}</span>{label}
             {key === 'ideas' && affordable && <span style={{ position: 'absolute', top: 5, right: 12, width: 6, height: 6, borderRadius: 3, background: C.gold }} />}
+            {key === 'people' && hungry > 0 && <span style={{ position: 'absolute', top: 5, right: 12, width: 6, height: 6, borderRadius: 3, background: C.red }} />}
           </button>
         ))}
       </div>
@@ -661,6 +670,7 @@ export function VillagePage({ ctx, skin: startSkin }) {
             <button type="button" aria-label="Close" onClick={() => setTab(null)} style={{ background: 'none', border: 0, color: C.low, cursor: 'pointer', font: 'inherit' }}>✕</button>
           </div>
           <div style={S.drawerBody}>
+            {tab === 'people' && <PeopleTab world={world} live={live} selected={selected} onPick={pickFromList} dusk={dusk} />}
             {tab === 'ideas' && <IdeasTab guide={guide} idle={idle} run={run} api={api} />}
             {tab === 'upgrades' && <UpgradesTab guide={guide} idle={idle} run={run} api={api} />}
             {tab === 'legacy' && <LegacyTab legacy={legacy} idle={idle} run={run} api={api} />}
@@ -683,7 +693,7 @@ export function VillagePage({ ctx, skin: startSkin }) {
                 <div style={S.h}>Sound</div>
                 <div><Btn on={sound} onClick={toggleSound}>{sound ? 'Sound on' : 'Sound off'}</Btn></div>
                 <div style={S.h}>Keys</div>
-                <div style={S.low}>Space pauses, 1 to 5 set the speed, C goes to camp, F follows, Esc closes.</div>
+                <div style={S.low}>Space pauses, 1 to 5 set the speed, P shows people, C goes to camp, F follows, Esc closes.</div>
                 <div style={S.h}>Daily token limit</div>
                 <div style={S.row}>
                   <input type="number" min="0" step="1000" style={S.input} value={budgetText} onChange={e => setBudgetText(e.target.value)} />
@@ -727,19 +737,11 @@ export function VillagePage({ ctx, skin: startSkin }) {
         </div>
       )}
 
-      {setup && <EngineSetup setup={setup} busy={busy === 'engine'} onInstall={() => void installEngine()} />}
+      {welcome && world && <Welcome onBegin={() => { setWelcome(false); remember('hermes-village.welcomed', '1') }} />}
 
-      {welcome && world && !setup && <Welcome onBegin={() => { setWelcome(false); remember('hermes-village.welcomed', '1') }} />}
-
-      {(error || hint) && !setup && <div role="alert" className="hv-panel" style={{ ...S.notice, top: 'auto', bottom: DOCK + 16, borderColor: error ? C.red : C.line }}>{error || hint}</div>}
+      {(error || hint) && <div role="alert" className="hv-panel" style={{ ...S.notice, top: 'auto', bottom: DOCK + 16, borderColor: error ? C.red : C.line }}>{error || hint}</div>}
 
       <div className="hv-panel" style={S.dock}>
-        <div style={S.people}>
-          {(world?.villagers ?? []).map(v => (
-            <Person key={v.name} v={v} live={live?.villagers?.[v.name]} selected={selected === v.name} onSelect={onSelect}
-              gone={!!v.dying && dusk} maxHealth={world?.max_health ?? 5} />
-          ))}
-        </div>
         <div style={S.bar}>
           <span className="hv-w1" style={S.h}>Focus</span>
           {guide && Object.entries(guide.focuses).map(([key, text]) => (

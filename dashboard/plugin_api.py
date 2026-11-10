@@ -52,17 +52,6 @@ async def state(have: str = "") -> dict:
     return await _run(service.snapshot, have[:64])
 
 
-@router.get("/engine")
-async def engine_status() -> dict:
-    return await _run(service.engine_status)
-
-
-@router.post("/engine")
-async def install_engine(body: dict | None = None) -> dict:
-    """Downloads the pinned engine. Only the player's own button or /village setup comes here."""
-    return await _run(service.install_engine)
-
-
 @router.post("/guide")
 async def guide(body: dict) -> dict:
     return await _run(service.guide, str((body or {}).get("text", "")))

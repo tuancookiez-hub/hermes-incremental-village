@@ -16,14 +16,13 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from . import fetch
 
 PROTOCOL = 2
-ENGINE_VERSION = "0.10.0"  # must match engine-rs/Cargo.toml and plugin.yaml
+ENGINE_VERSION = "0.11.0"  # must match engine-rs/Cargo.toml and plugin.yaml
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 RULES_PATH = Path(__file__).resolve().with_name("rules.json")
 _EXE = "hermes-village-engine.exe" if os.name == "nt" else "hermes-village-engine"
-_REBUILD = "run /village setup, or `cargo install --path engine-rs --locked` in the Hermes Incremental Village plugin folder"
+_REBUILD = "run `cargo install --path engine-rs --locked` in the Hermes Incremental Village plugin folder"
 
 
 class EngineUnavailable(RuntimeError):
@@ -39,17 +38,13 @@ def rules_sha256() -> str:
 
 
 def find_binary() -> str | None:
-    """HERMES_VILLAGE_ENGINE, a development build next to the plugin, the downloaded engine for this
-    version, cargo's bin folder, then PATH."""
+    """HERMES_VILLAGE_ENGINE, a development build next to the plugin, cargo's bin folder, then PATH."""
     named = os.environ.get("HERMES_VILLAGE_ENGINE")
     if named and Path(named).is_file():
         return named
     built = PLUGIN_ROOT / "engine-rs" / "target" / "release" / _EXE
     if built.is_file():
         return str(built)
-    fetched = fetch.installed_path(ENGINE_VERSION)
-    if fetched and fetched.is_file():
-        return str(fetched)
     installed = Path(os.environ.get("CARGO_HOME") or Path.home() / ".cargo") / "bin" / _EXE
     if installed.is_file():
         return str(installed)

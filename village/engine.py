@@ -1,9 +1,10 @@
-"""Deterministic Stone Age village rules: a thin client for the Rust engine.
+"""Deterministic Stone Age village rules, behind one set of names.
 
-The rules themselves live in ``engine-rs`` (Rust) and every constant and table in
-``village/rules.json``. This module keeps the names the rest of the plugin has always used
-(``engine.run_day``, ``engine.BUILDINGS``, ...) and forwards each call to the engine process
-through ``village.bridge``. Importing it never needs the binary; the first call does.
+The rules exist twice and are held equal by the differential tests: ``village/pyengine.py`` (Python,
+always there, needs nothing installed) and ``engine-rs`` (Rust, optional and faster). This module
+keeps the names the rest of the plugin uses (``engine.run_day``, ``engine.BUILDINGS``, ...) and sends
+each call to the Rust engine when one that matches this version is installed, and to the Python
+rules otherwise. Every constant and table is in ``village/rules.json``.
 
 Worlds are plain JSON-style dicts, as before. After a call that changes the world, the caller's
 ``world`` dict, its ``villagers`` list and each villager dict are updated in place, so references
@@ -13,11 +14,14 @@ such as ``ash = world["villagers"][0]`` stay live. Villagers are passed by posit
 from __future__ import annotations
 
 import json
-from functools import lru_cache
+import logging
+import os
+from functools import lru_cache, wraps
 from pathlib import Path
 from typing import Any
 
 from . import bridge
+from . import pyengine as _py
 from .bridge import EngineError, EngineUnavailable  # noqa: F401 - re-exported for callers
 
 _R: dict[str, Any] = json.loads(Path(__file__).with_name("rules.json").read_text(encoding="utf-8"))
@@ -426,3 +430,122 @@ def resources(world: dict) -> dict:
 def public_state(world: dict, now: float, have: str = "") -> dict:
     """What the page may show. ``have`` is the land revision the page already holds."""
     return _read("public_state", world, now=now, have=have)
+
+
+# ---------------------------------------------------------------- which engine answers
+
+log = logging.getLogger(__name__)
+_BACKEND: str | None = None  # "rust" or "python", decided on the first call
+
+
+def backend() -> str:
+    """HERMES_VILLAGE_BACKEND=python or =rust forces one. Otherwise Rust when a matching engine is
+    installed, and the built-in Python rules when it is not."""
+    global _BACKEND
+    if _BACKEND is None:
+        want = os.environ.get("HERMES_VILLAGE_BACKEND", "").strip().lower()
+        if want in ("python", "rust"):
+            _BACKEND = want
+        else:
+            try:
+                if bridge.find_binary() is None:
+                    raise EngineUnavailable("no engine binary")
+                bridge.call("describe_action", None, {"action": {"verb": "rest"}})
+                _BACKEND = "rust"
+            except (EngineUnavailable, EngineError, OSError) as exc:
+                log.info("hermes-village: using the built-in Python rules (%s)", exc)
+                _BACKEND = "python"
+    return _BACKEND
+
+
+def use_backend(name: str | None) -> None:
+    """Tests pick an engine with this. None decides again on the next call."""
+    global _BACKEND
+    _BACKEND = name
+
+
+def _pack_seen(v: dict) -> None:
+    """Rewrite one villager's seen land as a 256-bit map per chunk, the form a save holds."""
+    seen = v.get("seen")
+    if seen is None or (isinstance(seen, dict) and all(isinstance(x, str) for x in seen.values())):
+        return
+    chunks: dict[str, int] = {}
+    for key in seen_tiles(v):
+        x, y = map(int, key.split(","))
+        index = (y & 15) * 16 + (x & 15)
+        # the inverse of seen_tiles: limbs low first, each written high bit first
+        bit = 255 - ((index // 64) * 64 + 63 - index % 64)
+        ck = f"{x >> 4},{y >> 4}"
+        chunks[ck] = chunks.get(ck, 0) | (1 << bit)
+    v["seen"] = {ck: format(bits, "064x") for ck, bits in sorted(chunks.items())}
+
+
+def _unpack_seen(v: dict) -> None:
+    """The Python rules test single tiles, so they hold seen land as "x,y" keys."""
+    seen = v.get("seen")
+    if seen is None or (isinstance(seen, dict) and not any(isinstance(x, str) for x in seen.values())):
+        return
+    v["seen"] = dict.fromkeys(sorted(seen_tiles(v)), 1)
+
+
+def _villagers(world: Any) -> list:
+    return world["villagers"] if isinstance(world, dict) and isinstance(world.get("villagers"), list) else []
+
+
+def _in_python(name: str):
+    fn = getattr(_py, name)
+
+    def call(*args: Any, **kwargs: Any) -> Any:
+        _py.CAMP = CAMP
+        world = args[0] if args else None
+        people = list(_villagers(world))
+        for v in people:
+            _unpack_seen(v)
+        try:
+            out = fn(*args, **kwargs)
+        finally:
+            # villagers can join or die during a call, so pack whoever is there now as well
+            for v in _villagers(world) + people:
+                _pack_seen(v)
+        if name == "new_world":
+            for v in _villagers(out):
+                _pack_seen(v)
+        return out
+
+    return call
+
+
+def _either(name: str):
+    rust, python = globals()[name], _in_python(name)
+
+    @wraps(rust)
+    def call(*args: Any, **kwargs: Any) -> Any:
+        if backend() == "python":
+            return python(*args, **kwargs)
+        try:
+            return rust(*args, **kwargs)
+        except EngineUnavailable as exc:
+            if os.environ.get("HERMES_VILLAGE_BACKEND", "").strip().lower() == "rust":
+                raise
+            # the engine went away mid-game: the world is untouched, so the Python rules carry on
+            log.warning("hermes-village: the Rust engine stopped (%s); carrying on with the Python rules", exc)
+            use_backend("python")
+            return python(*args, **kwargs)
+
+    if hasattr(rust, "cache_clear"):  # the land cache: clear it in whichever engine holds one
+        def cache_clear() -> None:
+            rust.cache_clear()
+            getattr(_py, name).cache_clear()
+        call.cache_clear = cache_clear
+    return call
+
+
+for _name in (
+    "_land", "_land_char", "_find_camp", "tile", "_char", "_base_char", "_near_tile", "new_world", "season", "era",
+    "max_health", "_knows", "_lit_fire_near", "_room", "_reveal", "_open_chunk", "find_path", "observe",
+    "describe_action", "execute", "instinct_actions", "_scout", "_home", "_arrival", "_herds_live", "_seed_forest",
+    "_grow", "run_day", "advance", "plant_idea", "buy_upgrade", "set_focus", "legacy_earned", "set_speed",
+    "restart_day", "needs_council", "land_rev", "land_view", "resources", "public_state",
+):
+    globals()[_name] = _either(_name)
+del _name

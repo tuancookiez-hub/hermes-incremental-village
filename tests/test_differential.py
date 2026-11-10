@@ -52,6 +52,24 @@ def _tiles(x):
     return out
 
 
+def _rust_built() -> bool:
+    try:
+        return bridge.find_binary() is not None and bool(bridge.call("describe_action", None, {"action": {"verb": "rest"}}))
+    except bridge.EngineUnavailable:
+        return False
+
+
+pytestmark = pytest.mark.skipif(not _rust_built(), reason="the Rust engine is not built; these tests compare it to the Python rules")
+
+
+@pytest.fixture(autouse=True)
+def _use_rust():
+    before = rust._BACKEND
+    rust.use_backend("rust")
+    yield
+    rust.use_backend(before)
+
+
 @pytest.fixture(autouse=True)
 def _camp(monkeypatch):
     monkeypatch.setattr(ref, "CAMP", None)
@@ -674,19 +692,33 @@ def test_a_dead_engine_process_is_restarted_once():
     assert bridge._bridge._proc is not first and bridge._bridge._proc.poll() is None
 
 
-def test_missing_or_stale_engine_raises_a_plain_sentence(monkeypatch):
+def test_missing_or_stale_engine_raises_a_plain_sentence_when_rust_is_required(monkeypatch):
     bridge.close()
+    monkeypatch.setenv("HERMES_VILLAGE_BACKEND", "rust")
     monkeypatch.setattr(bridge, "find_binary", lambda: None)
     with pytest.raises(bridge.EngineUnavailable, match="cargo install --path engine-rs"):
         rust.era({"guide": {"known": []}})
     monkeypatch.undo()
     bridge.close()
+    monkeypatch.setenv("HERMES_VILLAGE_BACKEND", "rust")
     monkeypatch.setattr(bridge, "rules_sha256", lambda: "0" * 64)
     with pytest.raises(bridge.EngineUnavailable, match="out of date.*cargo install --path engine-rs"):
         rust.new_world(1, NOW, ())
     monkeypatch.undo()
     bridge.close()
     assert rust.new_world(1, NOW, ())["seed"] == 1
+
+
+def test_an_engine_that_goes_away_hands_over_to_the_python_rules(monkeypatch):
+    monkeypatch.delenv("HERMES_VILLAGE_BACKEND", raising=False)
+    w = rust.new_world(4, NOW, ())
+    rust.run_day(w, {}, "habit", unwatched=True)
+    bridge.close()
+    monkeypatch.setattr(bridge, "find_binary", lambda: None)
+    rust.run_day(w, {}, "habit", unwatched=True)  # the same save carries on
+    assert w["day"] == 3 and rust.backend() == "python"
+    monkeypatch.undo()
+    bridge.close()
 
 
 def test_importing_the_engine_and_planner_never_starts_the_binary():

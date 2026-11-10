@@ -9,7 +9,7 @@ import sys
 import time
 from typing import Any
 
-from . import bridge, engine, fetch, planner
+from . import engine, planner
 from .store import PLUGIN_ID, Store
 
 log = logging.getLogger(__name__)
@@ -22,19 +22,6 @@ AUX_TASK = "village_planner"
 
 class VillageError(Exception):
     """A refusal the player should read (budget, lock, bad input)."""
-
-
-def engine_status(store: Store) -> dict:
-    return fetch.status(bridge.ENGINE_VERSION)
-
-
-def install_engine(store: Store) -> dict:
-    """Only ever called because the player asked. Downloads the pinned engine for this computer."""
-    try:
-        fetch.install(bridge.ENGINE_VERSION)
-    except fetch.FetchError as exc:
-        raise VillageError(str(exc)) from None
-    return engine_status(store)
 
 
 def _notify(day: int) -> None:

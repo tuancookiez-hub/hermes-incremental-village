@@ -1,6 +1,8 @@
 # Hermes Incremental Village
 
-A 3D Stone Age village whose three villagers — Ash, Bryn and Coll — are played by Hermes.
+![A village on day 101: huts, fields, fires and a storehouse beside a lake](docs/images/village.jpg)
+
+A 3D Stone Age village whose villagers are played by Hermes. It starts with three: Ash, Bryn and Coll.
 You are their guide, not their god: you give advice, and they decide what to do.
 
 - **The villagers only know what they can see.** Each villager's view covers 4 tiles in every
@@ -62,33 +64,35 @@ and Screen Overlay plugins are planned but not built.
 
 | Where | How |
 |---|---|
-| Desktop | Open **Village** in the sidebar. The village fills the page: status runs along the top, villagers and actions dock at the bottom, and Ideas, Upgrades, Legacy, Build, Speak, Log and Settings open from the right. |
+| Desktop | Open **Village** in the sidebar. The village fills the page: status and the population run along the top, focus, speed and the council button dock at the bottom, and People, Ideas, Upgrades, Legacy, Build, Speak, Story and Settings open from the right. |
 | Any chat | `/village` (status), `/village plan`, `/village speed <pause|1|2|4|8|16>`, `/village habit` (skip to a new free day), `/village guide <advice>`, `/village budget <tokens>`, `/village ideas`, `/village plant <idea>`, `/village upgrade <name>`, `/village focus <food\|shelter\|explore\|learn>` |
 | Agent tools | `village_status`, `village_guide`, `village_habit_day`, `village_plan_day` (toolset `village`) |
 
-### Install (local development)
+### Install
 
-1. Link or copy this folder to `<HERMES_HOME>/plugins/hermes-village`.
-2. Run `hermes plugins enable hermes-village`, then restart the gateway so the backend routes mount.
-3. In Desktop, turn on the plugin under **Capabilities → Plugins**.
-4. Open the page and press **Download engine**, or run `/village setup` in chat. This fetches the
-   rules engine for your computer once. You do not need Rust.
+```bash
+hermes plugins install tuancookiez-hub/hermes-incremental-village
+```
 
-Prefer to build it yourself? With [Rust](https://rustup.rs) installed, run this from this folder:
+Then turn the plugin on under **Capabilities → Plugins** in Desktop and open **Village** in the sidebar.
+There is nothing else to set up: the rules are plain Python inside the plugin.
+
+For local development, link or copy this folder to `<HERMES_HOME>/plugins/hermes-village`, run
+`hermes plugins enable hermes-village`, and restart the gateway so the backend routes mount.
+
+### The optional Rust engine
+
+The same rules also exist in Rust, in `engine-rs/`, and the tests hold the two equal day by day. The
+plugin never downloads or builds it. If you install it yourself, the plugin uses it, which helps most
+when catching up many missed days:
+
 ```bash
 cargo install --path engine-rs --locked
 ```
-The plugin checks the engine's version, rules and protocol when it starts it, and refuses a mismatch
-with a message saying so. A new plugin version asks for its matching engine the same way.
 
-### Releasing the engine
-
-Set the version in `plugin.yaml`, `dashboard/manifest.json`, `engine-rs/Cargo.toml`,
-`village/bridge.py` and `village/engine-release.json`, commit, and push a tag such as `v0.10.0`.
-`.github/workflows/engine.yml` builds Windows, Linux and macOS, tests each one against the frozen
-Python engine, attests the builds and publishes them on the release. Then run
-`python scripts/pin_engine.py`, which verifies each attestation and records its checksum, and commit
-the result. The plugin only ever downloads a file whose checksum is pinned there.
+The plugin checks the engine's version, rules and protocol when it starts it. If it is missing, out of
+date or stops, the built-in Python rules carry on with the same save. `HERMES_VILLAGE_BACKEND=python`
+or `=rust` forces one.
 
 ### Rebuilding the Desktop page
 
@@ -103,7 +107,7 @@ Its only imports are `@hermes/plugin-sdk`, `react` and `react/jsx-runtime`.
 
 Drag to turn the view, scroll to zoom, and click a villager to follow them. The map in the corner shows
 everything they have seen; click it to look there. Space pauses, 1 to 5 set the speed, C goes to camp,
-F follows the group and Esc closes what is open. Sound is off until you turn it on in Settings, and it is
+P shows the people, F follows the group and Esc closes what is open. Sound is off until you turn it on in Settings, and it is
 made in the page, so nothing is downloaded.
 
 ## Costs, data, network and background work
@@ -117,28 +121,21 @@ made in the page, so nothing is downloaded.
   If the provider reports no usage, a conservative estimate is charged instead.
 - **Hermes does not report dollar cost to plugins** in this version (`usage.cost_usd` is not
   filled in), so the budget is counted in tokens.
-- **One child process, no background work or spending.** The rules run in
-  `hermes-village-engine`, a Rust program whose source is in `engine-rs/`. Hermes starts one copy per
-  process that uses the plugin, the first time it is needed, and talks to it over stdin and stdout.
-  It listens on no port, opens no network connection, reads and writes no files, and exits when
-  Hermes does. It only answers requests, so it does nothing while idle. The plugin starts no
-  timers, threads or schedulers. Nothing runs while nobody is looking: time is caught up when
-  the village is next read, by the page or a village tool or command. Catch-up uses habits and
-  instincts only and can never call a model. Councils happen only when you ask for one, and are
-  refused inside a cron run. The Desktop page re-reads the state every 5 seconds, and when a
-  day ends, only while it is open and visible; those reads are free.
-- **Network.** None while playing, apart from the model calls Hermes makes for a council through
-  your configured provider. There are no remote assets or scripts, and no telemetry. There is one
-  download, and only when you press **Download engine** or run `/village setup`: the engine for your
-  computer, about 1 MB, from this plugin's GitHub releases. It is checked against a checksum pinned
-  in `village/engine-release.json` and thrown away if it does not match. It is stored at
-  `<HERMES_HOME>/plugin-data/hermes-village/engine/`. Building from source instead downloads the
-  Rust crates (serde, serde_json, sha2 and their dependencies) from crates.io, pinned by
-  `engine-rs/Cargo.lock`.
+- **No background work or spending.** The plugin starts no timers, threads or schedulers. Nothing
+  runs while nobody is looking: time is caught up when the village is next read, by the page or a
+  village tool or command. Catch-up uses habits and instincts only and can never call a model.
+  Councils happen only when you ask for one, and are refused inside a cron run. The Desktop page
+  re-reads the state every 5 seconds, and when a day ends, only while it is open and visible; those
+  reads are free.
+- **One optional child process.** Only if you have installed the Rust engine yourself, Hermes starts
+  one copy of `hermes-village-engine` per process that uses the plugin and talks to it over stdin and
+  stdout. It listens on no port, opens no network connection, reads and writes no files, and exits
+  when Hermes does. Without it, no process is started at all.
+- **Network.** None, apart from the model calls Hermes makes for a council through your configured
+  provider. The plugin downloads nothing: no engine, no remote assets or scripts, and no telemetry.
 - **Data.** The village save and the token ledger live in Hermes plugin storage at
   `<HERMES_HOME>/plugin-data/hermes-village/data.db` (SQLite), along with the village's written
-  history. Your welcome, look and sound choices stay in this browser. Python owns storage: the engine is
-  handed the world and hands it back. The plugin reads no files outside that folder and never
+  history. Your welcome, look and sound choices stay in this browser. The plugin reads no files outside that folder and never
   touches credentials.
 - **What the model sees.** Only the game rules, the villagers' local views, memories and what
   they heard, plus your guidance. It sees nothing from your conversations or files.
@@ -148,19 +145,21 @@ made in the page, so nothing is downloaded.
 
 ```
 plugin.yaml, __init__.py      agent half: tools, /village, "Village planner" model slot
-engine-rs/                    the rules in Rust: clock, catch-up, perception, validation, replay
-village/rules.json            every game constant and table, shared by Rust and Python
-village/engine.py             thin client: the same functions, forwarded to the Rust engine
-village/bridge.py             starts the engine and talks to it over a pipe
+village/rules.json            every game constant and table
+village/pyengine.py           the rules in Python: clock, catch-up, perception, validation, replay
+village/engine.py             one set of names in front of the Python rules and the Rust engine
+village/bridge.py             starts the optional Rust engine and talks to it over a pipe
 village/planner.py            council prompt and JSON schema
 village/service.py            shared operations, token budget gate, spend ledger
 village/store.py              SQLite in Hermes plugin storage
 dashboard/plugin_api.py       read/write routes for the Desktop page (never call a model)
 desktop/plugin.js             built Desktop page (do not edit; edit web/src)
 web/                          Desktop page source (React + three.js) and build
-tests/                        python -m pytest tests; reference_engine.py is the original Python
-                              rules, kept so Rust can be compared with it day by day
-spike/budget_sim.py           offline cost model used to design the council budget
+engine-rs/                    the same rules in Rust (optional)
+tests/                        python -m pytest tests; reference_engine.py is the frozen copy of the
+                              rules that both engines are compared with
+docs/population-design.md     the approved design for what comes next
+spike/                        offline models used to design the council budget and population
 ```
 
 ## License

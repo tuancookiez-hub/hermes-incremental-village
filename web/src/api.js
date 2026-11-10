@@ -4,8 +4,6 @@ export function makeApi(ctx) {
     ctx.rest(path, method === 'GET' ? { method } : { method, body: body ?? {} })
   return {
     state: have => call(have ? `/state?have=${encodeURIComponent(have)}` : '/state'),
-    engine: () => call('/engine'),
-    installEngine: () => call('/engine', 'POST', {}),
     guide: text => call('/guide', 'POST', { text }),
     habit: () => call('/habit', 'POST', {}),
     ack: () => call('/ack', 'POST', {}),

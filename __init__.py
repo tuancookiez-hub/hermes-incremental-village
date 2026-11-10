@@ -133,9 +133,6 @@ def register(ctx) -> None:
                     return service.format_status(service.snapshot(_store))
                 snap = service.set_budget(_store, rest.replace(",", "").replace("_", ""))
                 return f"Daily village budget set to {snap['budget']['daily_tokens']:,} tokens."
-            if sub == "setup":
-                state = service.install_engine(_store)
-                return f"Village engine {state['version']} installed. Open the Village page to play."
             if sub == "status":
                 return service.format_status(service.snapshot(_store))
             if sub == "ideas":
@@ -152,9 +149,8 @@ def register(ctx) -> None:
             if sub == "focus":
                 return service.format_ideas(service.focus(_store, rest.strip().lower() or None))
             return ("Usage: /village [status | plan | habit | guide <advice> | budget [tokens] | ideas | "
-                    "plant <idea> | upgrade <name> | focus <food|shelter|explore|learn> | speed <pause|1|2|4|8|16> | setup]\n"
-                    "plan holds a council (one model call, counts against the daily budget); setup downloads the "
-                    "rules engine once, from this plugin's GitHub releases; everything else is free.")
+                    "plant <idea> | upgrade <name> | focus <food|shelter|explore|learn> | speed <pause|1|2|4|8|16>]\n"
+                    "plan holds a council (one model call, counts against the daily budget); everything else is free.")
         except service.VillageError as exc:
             return f"Village: {exc}"
         except service.engine.EngineUnavailable as exc:
@@ -165,6 +161,6 @@ def register(ctx) -> None:
     ctx.register_command(
         name="village",
         handler=command,
-        description="Hermes Incremental Village: status, plan (model council), habit (free day), guide, budget, ideas, plant, upgrade, focus, speed, setup (download the engine).",
-        args_hint="[status|plan|habit|guide <advice>|budget [tokens]|ideas|plant <idea>|upgrade <name>|focus <kind>|speed <value>|setup]",
+        description="Hermes Incremental Village: status, plan (model council), habit (free day), guide, budget, ideas, plant, upgrade, focus, speed.",
+        args_hint="[status|plan|habit|guide <advice>|budget [tokens]|ideas|plant <idea>|upgrade <name>|focus <kind>|speed <value>]",
     )

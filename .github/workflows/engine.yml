@@ -1,5 +1,6 @@
-# Builds the rules engine for each platform when a version tag is pushed, attests every build, and
-# publishes them on the release. scripts/pin_engine.py then pins their checksums in the plugin.
+# Builds the optional Rust engine for each platform when a version tag is pushed, tests it against the
+# built-in Python rules, attests every build and publishes them on the release. The plugin never
+# downloads these: it runs on the Python rules unless you install the Rust engine yourself.
 name: Build engine
 
 on:
@@ -67,6 +68,7 @@ jobs:
           cargo test --release --locked --target "${{ matrix.target }}" --manifest-path engine-rs/Cargo.toml
           python -m pip install pytest
           HERMES_VILLAGE_ENGINE="$PWD/dist/hermes-village-engine-${VERSION}-${{ matrix.name }}${{ matrix.ext }}" python -m pytest tests -q
+          HERMES_VILLAGE_BACKEND=python python -m pytest tests/test_village.py tests/test_backends.py -q
 
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
@@ -96,4 +98,4 @@ jobs:
         run: |
           cd dist
           sha256sum hermes-village-engine-* > SHA256SUMS
-          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "Engine builds for Hermes Incremental Village." hermes-village-engine-* SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "Optional Rust engine builds for Hermes Incremental Village. The plugin works without them." hermes-village-engine-* SHA256SUMS
