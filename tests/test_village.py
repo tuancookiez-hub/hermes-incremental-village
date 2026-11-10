@@ -1281,3 +1281,68 @@ def test_the_chronicle_notes_a_first_building_once(store):
         store.save_world(db, w)
     told = [n["text"] for n in service.snapshot(store)["chronicle"]]
     assert told.count("Ash built the first lean-to.") == 1 and not any("Bryn built" in t for t in told)
+
+
+# ---------------------------------------------------------------- ways of life
+
+from village import policy  # noqa: E402
+
+
+def test_everyone_has_a_way_and_it_becomes_their_orders(store):
+    snap = service.snapshot(store)
+    ways = snap["world"]["ways"]
+    assert set(ways) == {"Ash", "Bryn", "Coll"} and all(ways.values())
+    assert all(goal in policy.GOALS for way in ways.values() for goal in way)
+    with store.tx() as db:
+        w = store.load_world(db)
+    assert w["ways_day"] == w["day"]
+    assert any(v["standing_orders"] for v in w["villagers"])
+    assert all(a.get("verb") in engine.VERBS for v in w["villagers"] for a in v["standing_orders"])
+
+
+def test_a_way_only_keeps_real_goals():
+    assert policy.clean(["food", "fly", "food", 7, "explore"]) == ["food", "explore"]
+    assert policy.clean("food") == [] and len(policy.clean(list(policy.GOALS))) == policy.MAX_GOALS
+
+
+def test_a_council_can_change_a_way_and_it_is_kept(store, clock):
+    service.reset(store, 42)
+    plan = {"villagers": [{**GOOD["villagers"][0], "way": ["stone", "house", "nonsense", "explore"]}]}
+    service.plan_day(store, FakeLlm(plan))
+    assert service.snapshot(store)["world"]["ways"]["Ash"] == ["stone", "house", "explore"]
+    with store.tx() as db:
+        w = store.load_world(db)
+    assert "way" not in w["pending_plans"]["Ash"]  # the engine is only ever handed actions
+    clock.t += engine.DAY_SECONDS * 3
+    assert service.snapshot(store)["world"]["ways"]["Ash"] == ["stone", "house", "explore"]
+
+
+def test_ways_take_a_village_further_than_instincts_and_spend_nothing(store):
+    def live(days, with_ways):
+        w = engine.new_world(7, 0.0)
+        for _ in range(days):
+            if with_ways:
+                policy.apply(w)
+            engine.run_day(w, {}, "habit", unwatched=True)
+        return w
+    plain, guided = live(40, False), live(40, True)
+    assert len(guided["built"]) > len(plain["built"]) + 2
+    assert service.snapshot(store)["budget"]["used_today"] == 0
+
+
+def test_when_nothing_is_left_nearby_they_go_looking(store):
+    w = engine.new_world(7, 0.0)
+    for key in list(w["stocks"]):
+        w["stocks"][key] = 0  # every bush and tree they know of is bare
+    w["ways"] = {v["name"]: ["food"] for v in w["villagers"]}
+    acts = policy.orders(w)
+    assert all(a and a[0]["verb"] in ("walk", "look") for a in acts.values())
+    assert all(a.get("verb") != "gather" for plan in acts.values() for a in plan)
+
+
+def test_nobody_scouts_in_winter():
+    w = engine.new_world(7, 0.0)
+    w["day"] = engine.SEASON_DAYS * 3 + 1
+    assert engine.season(w) == "winter"
+    w["ways"] = {v["name"]: ["explore"] for v in w["villagers"]}
+    assert all(acts == [] for acts in policy.orders(w).values())

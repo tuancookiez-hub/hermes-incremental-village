@@ -9,7 +9,7 @@ import sys
 import time
 from typing import Any
 
-from . import engine, planner
+from . import engine, planner, policy
 from .store import PLUGIN_ID, Store
 
 log = logging.getLogger(__name__)
@@ -104,7 +104,10 @@ def _world(store: Store, db) -> dict:
     if fresh:
         world = engine.new_world(random.SystemRandom().randrange(1, 1_000_000), clock(), _legacy(store, db)["perks"])
     engine.advance(world, clock())
-    if world.pop("_dirty", False) or fresh:
+    # Each new day, every villager's way of life becomes that day's standing orders. Free, and only
+    # ordinary actions: the engine still validates and runs each one.
+    wrote = policy.apply(world)
+    if world.pop("_dirty", False) or fresh or wrote:
         store.save_world(db, world)
     return world
 
@@ -132,6 +135,8 @@ def snapshot(store: Store, have: str = "") -> dict:
         legacy = _legacy(store, db)
         book = _chronicle(store, db, world)
         state = engine.public_state(world, clock(), have)
+        state["ways"] = policy.ways(world)
+        state["way_goals"] = policy.GOALS
         if world["fallen"] and world["dead"]:
             # With nobody left alive there is nobody to see the land, but the village's end should
             # still happen somewhere. The last to die stands in, knowing all that was ever seen.
@@ -333,6 +338,7 @@ def plan_day(store: Store, llm: Any, *, purpose: str = "village.plan_day") -> di
             out_tok = planner.estimate_tokens(getattr(result, "text", "") or "") if result else 0
         world = _world(store, db)
         plans = planner.parse_plans(world, getattr(result, "parsed", None)) if result else {}
+        new_ways = {name: plan.pop("way") for name, plan in plans.items() if "way" in plan}
         outcome = "error" if error else ("ok" if plans else "unparsed")
         store.record_spend(db, game_day=day, input_tokens=in_tok, output_tokens=out_tok, estimated=estimated,
                            provider=getattr(result, "provider", None), model=getattr(result, "model", None),
@@ -353,6 +359,8 @@ def plan_day(store: Store, llm: Any, *, purpose: str = "village.plan_day") -> di
             # nobody jumps to wherever the rest of today would have left them.
             world["pending_plans"] = plans
             world["last_planned_day"] = world["day"]
+            for name, way in new_ways.items():  # what they keep doing after this council, for free
+                policy.set_way(world, name, way)
             store.save_world(db, world)
     _notify(world["day"])
     if failure:
@@ -396,8 +404,9 @@ def format_status(snap: dict) -> str:
         if v.get("dying"):
             lines.append(f"- {v['name']} died of {v['dying']}.")
             continue
+        way = " > ".join(w.get("ways", {}).get(v["name"], []))
         lines.append(f"- {v['name']} at ({v['x']},{v['y']}), health {v['health']}, energy {v['energy']}, skills "
-                     f"{', '.join(v['skills'])}, carrying {inv}.")
+                     f"{', '.join(v['skills'])}, carrying {inv}. Way: {way or 'instincts'}.")
     if w["council_reasons"]:
         lines.append("Worth a council: " + "; ".join(w["council_reasons"]) + ".")
     return "\n".join(lines)

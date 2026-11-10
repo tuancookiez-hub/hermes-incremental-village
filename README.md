@@ -45,9 +45,13 @@ You are their guide, not their god: you give advice, and they decide what to do.
 - **It keeps going while you're away.** When you come back, the days you missed are worked out
   from the villagers' habits and you get a summary, including anyone who died. Up to 30 days count
   per absence. Unwatched days can kill villagers, but never the last one.
-- **Free days keep them alive; councils move them forward.** Without any model call, villagers
-  follow their habits and instincts: eat, fetch wood, raise a first lean-to, wander. Skills,
-  trades and every later building need a plan.
+- **Each villager has a way of life, and following it is free.** A way is an ordered list of goals,
+  such as fire, then wood, then shelter, then explore. Every day the game turns it into ordinary
+  actions and validates them like any other, with no model call. When the food or wood they know of
+  runs out, they go and look for more, and they stay home in winter. Over 100 days with no model
+  calls, test villages averaged 14 buildings and usually reached the Farming Age.
+- **Councils are for changing course.** A council lets Hermes rethink each villager's way and plan
+  the things a way cannot do: talking, teaching, trading and deciding something new.
 - **You are the guide, not a god.** You cannot move anyone or place anything. You earn Insight as
   the village lives, builds and even loses people, then spend it on ideas and upgrades. Ideas follow
   real history, and villagers must test each one with an experiment that can fail. Your focus is
@@ -149,6 +153,7 @@ village/rules.json            every game constant and table
 village/pyengine.py           the rules in Python: clock, catch-up, perception, validation, replay
 village/engine.py             one set of names in front of the Python rules and the Rust engine
 village/bridge.py             starts the optional Rust engine and talks to it over a pipe
+village/policy.py             ways of life: turns each villager's goals into a day's standing orders
 village/planner.py            council prompt and JSON schema
 village/service.py            shared operations, token budget gate, spend ledger
 village/store.py              SQLite in Hermes plugin storage

@@ -29,7 +29,7 @@ const S = {
   drawer: { ...glass, position: 'absolute', top: TOP + 16, right: RAIL + 16, bottom: DOCK + 16, width: 300, maxWidth: 'calc(100% - 100px)', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' },
   drawerBody: { flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 12px 12px', display: 'flex', flexDirection: 'column', gap: 10 },
   dock: { ...glass, position: 'absolute', left: 8, right: 8, bottom: 8, height: DOCK, boxSizing: 'border-box', padding: '0 8px', display: 'flex', alignItems: 'center' },
-  person: { width: '100%', minHeight: 40, boxSizing: 'border-box', background: C.raised, ...line, borderRadius: 8, padding: '5px 8px', color: C.text, font: 'inherit', textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 1 },
+  person: { width: '100%', minHeight: 40, flexShrink: 0, boxSizing: 'border-box', background: C.raised, ...line, borderRadius: 8, padding: '5px 8px', color: C.text, font: 'inherit', textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 1 },
   bar: { display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 },
   clip: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   h: { fontSize: 11, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', color: C.low },
@@ -81,7 +81,7 @@ function DayBar({ dayT, wf }) {
   )
 }
 
-function Person({ v, live, selected, onSelect, gone, maxHealth }) {
+function Person({ v, live, selected, onSelect, gone, maxHealth, way }) {
   if (gone) {
     return <div className="hv-card" style={{ ...S.person, cursor: 'default', opacity: 0.55 }}><strong style={S.clip}>{v.name}</strong><span style={{ ...S.low, ...S.clip }}>died of {v.dying}</span></div>
   }
@@ -92,11 +92,12 @@ function Person({ v, live, selected, onSelect, gone, maxHealth }) {
         <Hearts value={v.dying ? v.health + 1 : v.health} max={maxHealth} />
       </span>
       <span style={{ ...S.low, ...S.clip }}>{v.hungry > 0 && !v.dying ? <span style={{ color: C.red }}>Hungry · </span> : null}{live?.doing ?? 'Idle'}</span>
+      {way?.length > 0 && <span style={{ ...S.clip, fontSize: 11, color: C.low }} title="Their way: what they keep doing on days without a council, first need first">{way.join(' → ')}</span>}
     </button>
   )
 }
 
-function PersonCard({ v, live, maxHealth, onClose }) {
+function PersonCard({ v, live, maxHealth, onClose, way, goals }) {
   const inv = Object.entries(live?.inv ?? v.inv ?? {}).filter(([, n]) => n > 0)
   const energy = live?.energy ?? v.energy
   return (
@@ -111,6 +112,7 @@ function PersonCard({ v, live, maxHealth, onClose }) {
       {v.thought && <div style={{ ...S.mid, fontStyle: 'italic' }}>"{v.thought}"</div>}
       {inv.length > 0 && <div style={S.mid}>Carrying {inv.map(([k, n]) => `${n} ${k}`).join(', ')}</div>}
       {(v.skills ?? []).length > 0 && <div style={S.low}>Knows {v.skills.join(', ')}</div>}
+      {way?.length > 0 && <div style={S.low} title="A council can change this. It costs nothing to follow.">Way: {way.map(g => goals?.[g] ?? g).join(', then ')}</div>}
       {(v.feedback ?? []).slice(0, 3).map((f, i) => <div key={i} style={S.low}>{f}</div>)}
     </div>
   )
@@ -138,10 +140,11 @@ function PeopleTab({ world, live, selected, onPick, dusk }) {
         {hungry > 0 && <span style={{ color: C.red }}> · {hungry} hungry</span>}
       </div>
       {alive.length > 0 && <div style={S.low}>{Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(' · ')}</div>}
+      <div style={S.low}>Each follows a way of life for free. A council lets them rethink it.</div>
       <div style={S.h}>Villagers</div>
       {everyone.map(v => (
         <Person key={v.name} v={v} live={live?.villagers?.[v.name]} selected={selected === v.name} onSelect={onPick}
-          gone={!!v.dying && dusk} maxHealth={world?.max_health ?? 5} />
+          gone={!!v.dying && dusk} maxHealth={world?.max_health ?? 5} way={world?.ways?.[v.name]} />
       ))}
     </>
   )
@@ -335,7 +338,7 @@ function Welcome({ onBegin }) {
       <div>Ash, Bryn and Coll are three people at the start of history. Hermes plays them: they think, argue and decide for themselves. You can only guide.</div>
       <div style={S.mid}><strong style={{ color: C.text }}>Focus</strong> urges them on free days, if they trust you.</div>
       <div style={S.mid}><strong style={{ color: C.text }}>Ideas</strong> cost Insight and plant a thought. They still have to work it out.</div>
-      <div style={S.mid}><strong style={{ color: C.text }}>Hold council</strong> makes one model call: they plan tomorrow themselves and you see what they chose.</div>
+      <div style={S.mid}><strong style={{ color: C.text }}>Hold council</strong> makes one model call: they plan tomorrow and rethink their way of life, which they then follow for free.</div>
       <div style={S.mid}>Everything is limited and winter kills. The land has no edge and starts dark, so what they need next is always further away.</div>
       <div><Btn primary onClick={onBegin}>Begin</Btn></div>
     </div>
@@ -712,7 +715,7 @@ export function VillagePage({ ctx, skin: startSkin }) {
         </div>
       )}
 
-      {shown && !(shown.dying && dusk) && <PersonCard v={shown} live={live?.villagers?.[shown.name]} maxHealth={world?.max_health ?? 5} onClose={() => setSelected(null)} />}
+      {shown && !(shown.dying && dusk) && <PersonCard v={shown} live={live?.villagers?.[shown.name]} maxHealth={world?.max_health ?? 5} onClose={() => setSelected(null)} way={world?.ways?.[shown.name]} goals={world?.way_goals} />}
 
       {world?.fallen && dusk && (
         <div className="hv-panel" style={S.welcome}>

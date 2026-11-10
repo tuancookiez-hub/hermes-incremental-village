@@ -18,7 +18,7 @@ from typing import Any
 
 
 PROTOCOL = 2
-ENGINE_VERSION = "0.11.0"  # must match engine-rs/Cargo.toml and plugin.yaml
+ENGINE_VERSION = "0.12.0"  # must match engine-rs/Cargo.toml and plugin.yaml
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 RULES_PATH = Path(__file__).resolve().with_name("rules.json")
 _EXE = "hermes-village-engine.exe" if os.name == "nt" else "hermes-village-engine"

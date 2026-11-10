@@ -34405,7 +34405,7 @@ var S = {
   drawer: { ...glass, position: "absolute", top: TOP + 16, right: RAIL + 16, bottom: DOCK + 16, width: 300, maxWidth: "calc(100% - 100px)", boxSizing: "border-box", display: "flex", flexDirection: "column" },
   drawerBody: { flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 12px 12px", display: "flex", flexDirection: "column", gap: 10 },
   dock: { ...glass, position: "absolute", left: 8, right: 8, bottom: 8, height: DOCK, boxSizing: "border-box", padding: "0 8px", display: "flex", alignItems: "center" },
-  person: { width: "100%", minHeight: 40, boxSizing: "border-box", background: C.raised, ...line, borderRadius: 8, padding: "5px 8px", color: C.text, font: "inherit", textAlign: "left", cursor: "pointer", display: "flex", flexDirection: "column", justifyContent: "center", gap: 1 },
+  person: { width: "100%", minHeight: 40, flexShrink: 0, boxSizing: "border-box", background: C.raised, ...line, borderRadius: 8, padding: "5px 8px", color: C.text, font: "inherit", textAlign: "left", cursor: "pointer", display: "flex", flexDirection: "column", justifyContent: "center", gap: 1 },
   bar: { display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 },
   clip: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   h: { fontSize: 11, fontWeight: 600, letterSpacing: 0.5, textTransform: "uppercase", color: C.low },
@@ -34442,7 +34442,7 @@ function DayBar({ dayT, wf }) {
     /* @__PURE__ */ jsx("div", { style: { position: "absolute", left: `${wf * 100}%`, top: -2, width: 1, height: 8, background: C.low } })
   ] });
 }
-function Person({ v, live, selected, onSelect, gone, maxHealth }) {
+function Person({ v, live, selected, onSelect, gone, maxHealth, way }) {
   if (gone) {
     return /* @__PURE__ */ jsxs("div", { className: "hv-card", style: { ...S.person, cursor: "default", opacity: 0.55 }, children: [
       /* @__PURE__ */ jsx("strong", { style: S.clip, children: v.name }),
@@ -34460,10 +34460,11 @@ function Person({ v, live, selected, onSelect, gone, maxHealth }) {
     /* @__PURE__ */ jsxs("span", { style: { ...S.low, ...S.clip }, children: [
       v.hungry > 0 && !v.dying ? /* @__PURE__ */ jsx("span", { style: { color: C.red }, children: "Hungry \xB7 " }) : null,
       live?.doing ?? "Idle"
-    ] })
+    ] }),
+    way?.length > 0 && /* @__PURE__ */ jsx("span", { style: { ...S.clip, fontSize: 11, color: C.low }, title: "Their way: what they keep doing on days without a council, first need first", children: way.join(" \u2192 ") })
   ] });
 }
-function PersonCard({ v, live, maxHealth, onClose }) {
+function PersonCard({ v, live, maxHealth, onClose, way, goals }) {
   const inv = Object.entries(live?.inv ?? v.inv ?? {}).filter(([, n]) => n > 0);
   const energy = live?.energy ?? v.energy;
   return /* @__PURE__ */ jsxs("div", { className: "hv-panel", style: S.card, children: [
@@ -34494,6 +34495,10 @@ function PersonCard({ v, live, maxHealth, onClose }) {
       "Knows ",
       v.skills.join(", ")
     ] }),
+    way?.length > 0 && /* @__PURE__ */ jsxs("div", { style: S.low, title: "A council can change this. It costs nothing to follow.", children: [
+      "Way: ",
+      way.map((g) => goals?.[g] ?? g).join(", then ")
+    ] }),
     (v.feedback ?? []).slice(0, 3).map((f, i) => /* @__PURE__ */ jsx("div", { style: S.low, children: f }, i))
   ] });
 }
@@ -34522,6 +34527,7 @@ function PeopleTab({ world, live, selected, onPick, dusk }) {
       ] })
     ] }),
     alive.length > 0 && /* @__PURE__ */ jsx("div", { style: S.low, children: Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(" \xB7 ") }),
+    /* @__PURE__ */ jsx("div", { style: S.low, children: "Each follows a way of life for free. A council lets them rethink it." }),
     /* @__PURE__ */ jsx("div", { style: S.h, children: "Villagers" }),
     everyone.map((v) => /* @__PURE__ */ jsx(
       Person,
@@ -34531,7 +34537,8 @@ function PeopleTab({ world, live, selected, onPick, dusk }) {
         selected: selected === v.name,
         onSelect: onPick,
         gone: !!v.dying && dusk,
-        maxHealth: world?.max_health ?? 5
+        maxHealth: world?.max_health ?? 5,
+        way: world?.ways?.[v.name]
       },
       v.name
     ))
@@ -34748,7 +34755,7 @@ function Welcome({ onBegin }) {
     ] }),
     /* @__PURE__ */ jsxs("div", { style: S.mid, children: [
       /* @__PURE__ */ jsx("strong", { style: { color: C.text }, children: "Hold council" }),
-      " makes one model call: they plan tomorrow themselves and you see what they chose."
+      " makes one model call: they plan tomorrow and rethink their way of life, which they then follow for free."
     ] }),
     /* @__PURE__ */ jsx("div", { style: S.mid, children: "Everything is limited and winter kills. The land has no edge and starts dark, so what they need next is always further away." }),
     /* @__PURE__ */ jsx("div", { children: /* @__PURE__ */ jsx(Btn, { primary: true, onClick: onBegin, children: "Begin" }) })
@@ -35152,7 +35159,7 @@ function VillagePage({ ctx, skin: startSkin }) {
         ] })
       ] })
     ] }),
-    shown && !(shown.dying && dusk) && /* @__PURE__ */ jsx(PersonCard, { v: shown, live: live?.villagers?.[shown.name], maxHealth: world?.max_health ?? 5, onClose: () => setSelected(null) }),
+    shown && !(shown.dying && dusk) && /* @__PURE__ */ jsx(PersonCard, { v: shown, live: live?.villagers?.[shown.name], maxHealth: world?.max_health ?? 5, onClose: () => setSelected(null), way: world?.ways?.[shown.name], goals: world?.way_goals }),
     world?.fallen && dusk && /* @__PURE__ */ jsxs("div", { className: "hv-panel", style: S.welcome, children: [
       /* @__PURE__ */ jsx("strong", { style: { fontSize: 17 }, children: "The village has fallen." }),
       /* @__PURE__ */ jsxs("div", { style: S.mid, children: [

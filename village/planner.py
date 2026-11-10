@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from . import engine
+from . import engine, policy
 
 MAX_OUTPUT_TOKENS = 1500  # hard cap for the first three villagers; also the budget gate's worst case
 TOKENS_PER_EXTRA_VILLAGER = 400
@@ -22,6 +22,7 @@ _BUILDING_TEXT = "; ".join(
     f"{name} costs {', '.join(f'{n} {k}' for k, n in b['cost'].items())}, {b['slots']} slots"
     f"{', needs ' + b['skill'] if b['skill'] else ''} ({b['effect']})"
     for name, b in engine.BUILDINGS.items())
+_WAY_TEXT = "; ".join(f"{goal} ({what})" for goal, what in policy.GOALS.items())
 
 SYSTEM = f"""You voice the villagers of a small Stone Age camp. You are NOT a god and not
 a manager: each villager decides for themself, from ONLY what they can see, remember and
@@ -73,8 +74,11 @@ Picking bushes bare may teach someone farming. Fields (F) are harvested with gat
 Buildings: {_BUILDING_TEXT}.
 The camp grows from Camp to Hamlet (2 buildings) to Village (4). Materials are carried
 personally, so pooling them for a building takes a trade.
-On days without a council villagers follow standing orders, then instincts: eat, fetch
-wood, raise a first lean-to, wander. Everything else needs a plan from this council.
+Councils are rare and cost the guide dearly, so most days nobody plans. On those days each villager
+follows their "way": an ordered list of goals they keep working through by themselves, first one that
+needs doing first. Goals: {_WAY_TEXT}.
+Set "way" (at most {policy.MAX_GOALS} goals) whenever a villager's life should change: it is what they will
+do for many days after this council. A way cannot talk, teach, trade or decide anything new; those need a plan.
 Coordinates are absolute (x,y); a view's top-left is given. @ marks the villager, L a building, F a field.
 At most {engine.MAX_ACTIONS} actions each. "standing_orders" (max 3 actions) is the habit the
 villager repeats on days nobody plans; make it something sensible to repeat.
@@ -108,6 +112,7 @@ PLAN_SCHEMA: dict[str, Any] = {
                     "actions": {"type": "array", "maxItems": engine.MAX_ACTIONS, "items": _ACTION},
                     "remember": {"type": "string", "maxLength": 80},
                     "standing_orders": {"type": "array", "maxItems": 3, "items": _ACTION},
+                    "way": {"type": "array", "maxItems": policy.MAX_GOALS, "items": {"type": "string", "enum": list(policy.GOALS)}},
                 },
             },
         }
@@ -119,7 +124,8 @@ def build_input(world: dict) -> str:
     built = ", ".join(f"{b['kind']} at ({b['x']},{b['y']})" for b in world["built"]) or "nothing yet"
     guide = (f"The guide advises: \"{world['guidance']}\"" if world["guidance"]
              else "The guide has said nothing today.")
-    views = [engine.observe(world, v) for v in world["villagers"]]
+    current = policy.ways(world)
+    views = [engine.observe(world, v) + f"\nway: {', '.join(current[v['name']])}" for v in world["villagers"]]
     now = engine.season(world)
     left = engine.SEASON_DAYS - (world["day"] - 1) % engine.SEASON_DAYS
     g = world["guide"]

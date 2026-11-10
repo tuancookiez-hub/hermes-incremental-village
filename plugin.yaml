@@ -1,9 +1,9 @@
 name: hermes-village
-version: 0.11.0
+version: 0.12.0
 description: >-
   Hermes Incremental Village: a 3D Stone Age village on endless generated land, whose villagers are played by Hermes.
   It starts with three, and they can die. Each villager sees only nearby tiles and plans its own day; the
-  game validates every action and owns time and resources. Model calls happen only
+  game validates every action and owns time and resources. Each villager follows a way of life for free, and a council lets Hermes rethink it. Model calls happen only
   when you ask for a council (one batched call each) and stop at a daily token budget
   you set. Days you miss are worked out for free when you return. The rules are plain Python
   inside the plugin: nothing is downloaded, and nothing runs in the background.
