@@ -1280,7 +1280,8 @@ def test_the_chronicle_notes_a_first_building_once(store):
         engine.run_day(w, {}, source="habit")
         store.save_world(db, w)
     told = [n["text"] for n in service.snapshot(store)["chronicle"]]
-    assert told.count("Ash built the first lean-to.") == 1 and not any("Bryn built" in t for t in told)
+    # Bryn may go on to build something else that day; what matters is one line for the first lean-to
+    assert told.count("Ash built the first lean-to.") == 1 and "Bryn built the first lean-to." not in told
 
 
 # ---------------------------------------------------------------- ways of life
@@ -1289,7 +1290,7 @@ from village import policy  # noqa: E402
 
 
 def test_everyone_has_a_way_and_it_becomes_their_orders(store):
-    snap = service.snapshot(store)
+    snap = service.reset(store, 42)  # a world where they wake beside trees and bushes they can see
     ways = snap["world"]["ways"]
     assert set(ways) == {"Ash", "Bryn", "Coll"} and all(ways.values())
     assert all(goal in policy.GOALS for way in ways.values() for goal in way)

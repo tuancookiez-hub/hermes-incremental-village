@@ -1,5 +1,5 @@
 name: hermes-village
-version: 0.12.0
+version: 0.12.1
 description: >-
   Hermes Incremental Village: a 3D Stone Age village on endless generated land, whose villagers are played by Hermes.
   It starts with three, and they can die. Each villager sees only nearby tiles and plans its own day; the
