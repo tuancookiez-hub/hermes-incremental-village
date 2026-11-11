@@ -411,6 +411,7 @@ export function createScene(container, { onPick } = {}) {
 
   // ---- camera follow: clicking a card focuses and follows until deselected or the user drags
   let following = false
+  let ink = false
   let watching = true // default view drifts with the group until the user takes the camera
   const goal = new Vector3()
   const delta = new Vector3()
@@ -658,7 +659,8 @@ export function createScene(container, { onPick } = {}) {
     const slot = clock ? clock.slot : spd
     const dayT = clock ? clock.dayT : 0.4
     syncFog(dt)
-    const night = theme.light(dayT, controls.target, camera)
+    // a pen drawing has no night: the ink look keeps a steady late-morning light
+    const night = theme.light(ink ? 0.4 : dayT, controls.target, camera)
     theme.tick(tt, dt, camera, controls, night)
     theme.seasonLook(world?.season, dt)
 
@@ -756,7 +758,7 @@ export function createScene(container, { onPick } = {}) {
   return {
     watch,
     lookAt,
-    setInk: on => theme.setInk(on),
+    setInk: on => { ink = !!on; theme.setInk(on) },
     lookingAt,
     update,
     setPlayback,

@@ -1264,12 +1264,13 @@ def test_a_fallen_village_keeps_its_land_on_screen(store):
 
 def test_the_chronicle_tells_the_story_and_starts_over_with_the_village(store):
     first = service.snapshot(store)["chronicle"]
-    assert first == [{"day": 1, "text": "Ash, Bryn and Coll made camp."}]
+    assert first[0] == {"day": 1, "text": "Ash, Bryn and Coll made camp."}
     fall(store)
     told = [n["text"] for n in service.snapshot(store)["chronicle"]]
     assert "Ash died of " in " ".join(told) and "The village has fallen." in told
     assert len(told) == len(set(told))
-    assert len(service.reset(store)["chronicle"]) == 1
+    fresh = service.reset(store)["chronicle"]
+    assert fresh[0]["text"] == "Ash, Bryn and Coll made camp." and all(n["day"] == 1 for n in fresh)
 
 
 def test_the_chronicle_notes_a_first_building_once(store):

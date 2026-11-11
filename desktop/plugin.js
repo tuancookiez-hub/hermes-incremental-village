@@ -33771,6 +33771,7 @@ function createScene(container, { onPick } = {}) {
     update(w);
   }
   let following = false;
+  let ink = false;
   let watching = true;
   const goal = new Vector3();
   const delta = new Vector3();
@@ -34010,7 +34011,7 @@ function createScene(container, { onPick } = {}) {
     const slot = clock ? clock.slot : spd;
     const dayT = clock ? clock.dayT : 0.4;
     syncFog(dt);
-    const night = theme.light(dayT, controls.target, camera);
+    const night = theme.light(ink ? 0.4 : dayT, controls.target, camera);
     theme.tick(tt, dt, camera, controls, night);
     theme.seasonLook(world?.season, dt);
     syncBuildings(world ? buildStateAt(world, slot) : [], tt, night);
@@ -34105,7 +34106,10 @@ function createScene(container, { onPick } = {}) {
   return {
     watch,
     lookAt,
-    setInk: (on) => theme.setInk(on),
+    setInk: (on) => {
+      ink = !!on;
+      theme.setInk(on);
+    },
     lookingAt,
     update,
     setPlayback,
