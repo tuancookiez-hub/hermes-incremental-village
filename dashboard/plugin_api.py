@@ -75,6 +75,11 @@ async def plant(body: dict) -> dict:
     return await _run(service.plant, (body or {}).get("idea"))
 
 
+@router.post("/auto")
+async def auto(body: dict) -> dict:
+    return await _run(service.auto_ideas, bool((body or {}).get("on")))
+
+
 @router.post("/upgrade")
 async def upgrade(body: dict) -> dict:
     return await _run(service.upgrade, (body or {}).get("upgrade"))

@@ -9,6 +9,7 @@ export function makeApi(ctx) {
     ack: () => call('/ack', 'POST', {}),
     budget: daily_tokens => call('/budget', 'POST', { daily_tokens }),
     plant: idea => call('/plant', 'POST', { idea }),
+    auto: on => call('/auto', 'POST', { on }),
     upgrade: upgrade => call('/upgrade', 'POST', { upgrade }),
     focus: focus => call('/focus', 'POST', { focus }),
     perk: perk => call('/perk', 'POST', { perk }),

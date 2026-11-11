@@ -136,11 +136,12 @@ function PeopleTab({ world, live, selected, onPick, dusk }) {
   return (
     <>
       <div style={S.mid}>
-        <strong style={{ color: C.text, fontSize: 15 }}>{alive.length}</strong> {alive.length === 1 ? 'person' : 'people'}
+        <strong style={{ color: C.text, fontSize: 15 }}>{alive.length}</strong> named {alive.length === 1 ? 'villager' : 'villagers'}
         {hungry > 0 && <span style={{ color: C.red }}> · {hungry} hungry</span>}
       </div>
       {alive.length > 0 && <div style={S.low}>{Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(' · ')}</div>}
       <div style={S.low}>Each follows a way of life for free. A council lets them rethink it.</div>
+      {(world?.folk ?? 0) > 0 && <div style={S.mid}><strong style={{ color: C.text }}>{big(world.folk)}</strong> folk live and work around them, in homes for {big(world.homes)}.</div>}
       <div style={S.h}>Villagers</div>
       {everyone.map(v => (
         <Person key={v.name} v={v} live={live?.villagers?.[v.name]} selected={selected === v.name} onSelect={onPick}
@@ -159,25 +160,75 @@ function Item({ title, note, tip, children }) {
   )
 }
 
-function IdeasTab({ guide, idle, run, api }) {
+const big = n => {
+  n = Number(n) || 0
+  if (n >= 1e6) return `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M`
+  if (n >= 1e4) return `${(n / 1e3).toFixed(n >= 1e5 ? 0 : 1)}k`
+  return Math.round(n).toLocaleString('en-US')
+}
+
+const NODE_W = 132
+const NODE_H = 62
+const TREE_W = 600
+
+// Ideas laid out as a tree: one row per era, each idea under what it builds on.
+function treeLayout(ideas, eras) {
+  const rows = eras.map(era => Object.keys(ideas).filter(k => ideas[k].era === era)).filter(r => r.length)
+  const at = {}
+  let y = 0
+  const bands = []
+  rows.forEach(row => {
+    const lines = Math.ceil(row.length / 4)
+    bands.push({ era: ideas[row[0]].era, y })
+    y += 22
+    for (let l = 0; l < lines; l++) {
+      const part = row.slice(l * 4, l * 4 + 4)
+      const gap = (TREE_W - part.length * NODE_W) / (part.length + 1)
+      part.forEach((k, i) => { at[k] = { x: gap + i * (NODE_W + gap), y } })
+      y += NODE_H + 26
+    }
+  })
+  return { at, bands, height: y }
+}
+
+function IdeasTab({ guide, idle, run, api, eras }) {
+  const { at, bands, height } = useMemo(() => treeLayout(guide.ideas, eras ?? []), [guide.ideas, eras])
+  const boosts = idea => Object.entries(idea.boost ?? {}).filter(([k]) => k !== 'fish' && k !== 'water_range').map(([k, n]) => `×${n} ${k}`).join(' · ')
   return (
     <>
-      {Object.entries(guide.ideas).map(([key, idea]) => {
-        const known = guide.known.includes(key)
-        const planted = guide.planted.includes(key)
-        const ready = idea.needs.every(n => guide.known.includes(n))
-        const tries = guide.attempts?.[key] ?? 0
-        return (
-          <Item key={key} title={idea.name} note={`Unlocks ${idea.unlocks}`} tip={idea.history}>
-            {known && <span style={{ ...S.low, color: C.green }}>Known</span>}
-            {!known && planted && <span style={S.low}>Being tried{tries ? ` · ${tries} failed` : ''}</span>}
-            {!known && !planted && (ready
-              ? <Btn disabled={idle || guide.insight < idea.cost} onClick={() => void run('plant', () => api.plant(key))}>Plant · {idea.cost}</Btn>
-              : <span style={S.low}>After {idea.needs.map(n => guide.ideas[n].name).join(', ')}</span>)}
-          </Item>
-        )
-      })}
-      <div style={S.low}>Still ahead: {guide.future_eras.join(' → ')}</div>
+      <div style={{ ...S.row, justifyContent: 'space-between' }}>
+        <span style={S.low}>Plant an idea with Insight. They still have to work it out, and each one changes what the whole village can do.</span>
+        <Btn on={guide.auto} disabled={idle} title="Plant the cheapest idea within reach each day, even while you are away" onClick={() => void run('auto', () => api.auto(!guide.auto))}>{guide.auto ? 'Auto on' : 'Auto off'}</Btn>
+      </div>
+      <div style={{ position: 'relative', width: TREE_W, height, flexShrink: 0 }}>
+        <svg width={TREE_W} height={height} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+          {Object.entries(guide.ideas).flatMap(([key, idea]) => idea.needs.filter(n => at[n] && at[key]).map(n => {
+            const x1 = at[n].x + NODE_W / 2, y1 = at[n].y + NODE_H, x2 = at[key].x + NODE_W / 2, y2 = at[key].y
+            const lit = guide.known.includes(n)
+            return <path key={`${n}-${key}`} d={`M${x1},${y1} C${x1},${y1 + 18} ${x2},${y2 - 18} ${x2},${y2}`} fill="none" stroke={lit ? C.gold : C.line} strokeWidth={lit ? 2 : 1.5} opacity={lit ? 0.9 : 1} />
+          }))}
+        </svg>
+        {bands.map(b => <div key={b.era} style={{ ...S.h, position: 'absolute', left: 0, top: b.y, color: b.era === guide.era ? C.gold : C.low }}>{b.era}</div>)}
+        {Object.entries(guide.ideas).map(([key, idea]) => {
+          const known = guide.known.includes(key)
+          const planted = guide.planted.includes(key)
+          const ready = idea.needs.every(n => guide.known.includes(n))
+          const can = ready && !planted && guide.insight >= idea.cost
+          const tries = guide.attempts?.[key] ?? 0
+          return (
+            <button key={key} type="button" className="hv-card" data-selected={known ? 'true' : undefined} disabled={idle || !can}
+              title={`${idea.hint}. ${idea.history}`} onClick={() => void run('plant', () => api.plant(key))}
+              style={{ position: 'absolute', left: at[key].x, top: at[key].y, width: NODE_W, height: NODE_H, boxSizing: 'border-box', padding: '5px 7px', textAlign: 'left', font: 'inherit', color: C.text, borderRadius: 8, borderWidth: 1, borderStyle: 'solid',
+                borderColor: known ? C.gold : can ? C.text : C.line, background: 'var(--hv-node, #10131c)', zIndex: 1, opacity: known || planted || ready ? 1 : 0.5, cursor: can ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <span style={{ ...S.row, justifyContent: 'space-between', gap: 4 }}>
+                <strong style={{ ...S.clip, fontSize: 12 }}>{idea.name}</strong>
+                <span style={{ fontSize: 11, color: known ? C.green : planted ? C.gold : can ? C.gold : C.low, whiteSpace: 'nowrap' }}>{known ? '✓' : planted ? `trying${tries ? ` ${tries}` : ''}` : idea.cost}</span>
+              </span>
+              <span style={{ fontSize: 10.5, lineHeight: 1.2, color: C.mid, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{boosts(idea) || idea.unlocks}</span>
+            </button>
+          )
+        })}
+      </div>
     </>
   )
 }
@@ -289,7 +340,7 @@ function fmtItems(o) {
   return Object.entries(o ?? {}).filter(([, n]) => n > 0).map(([k, n]) => `+${n} ${k}`).join(', ')
 }
 
-function Resources({ res, people, world }) {
+function Resources({ res, people, world, folk }) {
   if (!res) return null
   const ahead = outlook(world)
   const meals = people > 0 ? Math.floor(res.held.food / people) : 0
@@ -315,11 +366,17 @@ function Resources({ res, people, world }) {
       {res.fire_out && <div style={{ color: C.red, fontSize: 12 }}>The fire is out</div>}
       {ahead && <div style={{ fontSize: 12, marginTop: 3, color: ahead.bad ? C.gold : C.mid, whiteSpace: 'nowrap' }}>{ahead.text}</div>}
       <div style={{ fontSize: 12, color: meals < 2 ? C.red : C.mid, whiteSpace: 'nowrap' }} title="Food held, divided by everyone alive">Food lasts {meals} {meals === 1 ? 'day' : 'days'}</div>
+      {folk?.folk > 0 && (
+        <div style={{ fontSize: 12, marginTop: 3, color: C.mid, whiteSpace: 'nowrap' }} title="What the folk gathered yesterday, working the land around the store">
+          Folk brought <span style={{ color: C.green }}>+{big(folk.food)}</span> food, <span style={{ color: C.green }}>+{big(folk.wood)}</span> wood
+          <div>Homes {big(folk.folk)} / {big(folk.homes)}{folk.built?.length ? ` · built ${folk.built.length}` : ''}</div>
+        </div>
+      )}
     </div>
   )
 }
 
-const TABS = [['people', '☺', 'People'], ['ideas', '✦', 'Ideas'], ['upgrades', '▲', 'Upgrades'], ['legacy', '◆', 'Legacy'], ['build', '⌂', 'Build'], ['speak', '✎', 'Speak'], ['story', '≡', 'Story'], ['settings', '⚙', 'Settings']]
+const TABS = [['people', '☺', 'People'], ['ideas', '✦', 'Tree'], ['upgrades', '▲', 'Upgrades'], ['legacy', '◆', 'Legacy'], ['build', '⌂', 'Build'], ['speak', '✎', 'Speak'], ['story', '≡', 'Story'], ['settings', '⚙', 'Settings']]
 
 const SKINS = [['ps1', 'PS1 blue'], ['wood', 'RPG wood']]
 
@@ -614,6 +671,8 @@ export function VillagePage({ ctx, skin: startSkin }) {
   const paused = !!world?.paused_at
   const alive = (world?.villagers ?? []).filter(v => !v.dying)
   const hungry = alive.filter(v => v.hungry > 0).length
+  const fs = world?.folk_stats
+  const change = fs ? (fs.born ?? 0) - (fs.starved ?? 0) : 0
   const affordable = guide ? Object.entries(guide.ideas).some(([k, i]) => !guide.planted.includes(k) && i.needs.every(n => guide.known.includes(n)) && guide.insight >= i.cost) : false
 
   return (
@@ -626,9 +685,10 @@ export function VillagePage({ ctx, skin: startSkin }) {
         <span className="hv-w3" style={{ ...S.low, whiteSpace: 'nowrap' }}>{spd}{live?.phase ? ` · ${live.phase}` : ''}{paused ? ' · Paused' : ''}</span>
         <DayBar dayT={live?.dayT} wf={wf} />
         {world && (
-          <button type="button" onClick={() => setTab(t => (t === 'people' ? null : 'people'))} title={hungry ? `${hungry} going hungry. Open People (P)` : 'Open People (P)'}
+          <button type="button" onClick={() => setTab(t => (t === 'people' ? null : 'people'))} title={`${alive.length} villagers and ${(world.folk ?? 0).toLocaleString('en-US')} folk, with homes for ${(world.homes ?? 0).toLocaleString('en-US')}. Open People (P)`}
             style={{ ...S.stat, background: 'none', border: 0, padding: 0, color: C.text, font: 'inherit', cursor: 'pointer' }}>
-            <strong style={{ fontSize: 15, color: hungry ? C.red : C.text }}>{alive.length}</strong><span className="hv-w2" style={S.low}>{alive.length === 1 ? 'person' : 'people'}</span>
+            <strong style={{ fontSize: 19, color: hungry ? C.red : C.gold }}>{big(world.population ?? alive.length)}</strong><span className="hv-w2" style={S.low}>people</span>
+            {change !== 0 && <span className="hv-w2" style={{ fontSize: 12, color: change > 0 ? C.green : C.red }}>{change > 0 ? '+' : ''}{big(change)}/day</span>}
           </button>
         )}
         {guide && <span className="hv-w2" style={{ ...S.low, whiteSpace: 'nowrap' }}>{guide.era}</span>}
@@ -642,7 +702,7 @@ export function VillagePage({ ctx, skin: startSkin }) {
       </div>
 
       <div style={S.left}>
-        <Resources res={world?.resources} world={world} people={alive.length} />
+        <Resources res={world?.resources} world={world} people={world?.population ?? alive.length} folk={fs} />
         <div style={S.feed}>
           {dusk && (world?.current?.events ?? []).map(e => <strong key={e} style={{ color: DARK.test(e) ? C.red : C.gold }}>{plain(e)}</strong>)}
           {(live?.feed ?? []).slice(0, 3).map((f, i) => (
@@ -667,14 +727,14 @@ export function VillagePage({ ctx, skin: startSkin }) {
       </div>
 
       {tab && guide && (
-        <div className="hv-panel" style={S.drawer}>
+        <div className="hv-panel" style={{ ...S.drawer, ...(tab === 'ideas' ? { width: TREE_W + 26 } : null) }}>
           <div style={{ ...S.row, padding: '10px 12px 6px', justifyContent: 'space-between' }}>
             <strong>{TABS.find(t => t[0] === tab)[2]}</strong>
             <button type="button" aria-label="Close" onClick={() => setTab(null)} style={{ background: 'none', border: 0, color: C.low, cursor: 'pointer', font: 'inherit' }}>✕</button>
           </div>
           <div style={S.drawerBody}>
             {tab === 'people' && <PeopleTab world={world} live={live} selected={selected} onPick={pickFromList} dusk={dusk} />}
-            {tab === 'ideas' && <IdeasTab guide={guide} idle={idle} run={run} api={api} />}
+            {tab === 'ideas' && <IdeasTab guide={guide} idle={idle} run={run} api={api} eras={world?.eras} />}
             {tab === 'upgrades' && <UpgradesTab guide={guide} idle={idle} run={run} api={api} />}
             {tab === 'legacy' && <LegacyTab legacy={legacy} idle={idle} run={run} api={api} />}
             {tab === 'build' && <BuildTab buildings={world?.buildings} built={world?.built} />}

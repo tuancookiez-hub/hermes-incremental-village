@@ -48,7 +48,8 @@ def _legacy(store: Store, db) -> dict:
 
 # What gets written down in the village's history, out of everything a day reports.
 _WORTH_TELLING = ("died of", "has fallen", "looking for a home", "came through the winter", "has begun",
-                  "noticed seeds", "worked out", "The fire went out")
+                  "noticed seeds", "worked out", "The fire went out", "people now live here", "stepped up from",
+                  "of the folk")
 _CHRONICLE_LINES = 200
 
 
@@ -156,6 +157,14 @@ def guide(store: Store, text: str) -> dict:
         world["guidance_day"] = world["day"]
         store.save_world(db, world)
     _notify(world["day"])
+    return snapshot(store)
+
+
+def auto_ideas(store: Store, on: Any) -> dict:
+    with store.tx() as db:
+        world = _world(store, db)
+        engine.set_auto(world, on)
+        store.save_world(db, world)
     return snapshot(store)
 
 

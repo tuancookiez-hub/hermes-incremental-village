@@ -102,7 +102,7 @@ for _name in (
     "max_health", "_knows", "_lit_fire_near", "_room", "_reveal", "_open_chunk", "find_path", "observe",
     "describe_action", "execute", "instinct_actions", "_scout", "_home", "_arrival", "_herds_live", "_seed_forest",
     "_grow", "run_day", "advance", "plant_idea", "buy_upgrade", "set_focus", "legacy_earned", "set_speed",
-    "restart_day", "needs_council", "land_rev", "land_view", "resources", "public_state", "settlement", "population",
+    "restart_day", "set_auto", "needs_council", "land_rev", "land_view", "resources", "public_state", "settlement", "population",
 ):
     globals()[_name] = _wrap(_name)
 del _name

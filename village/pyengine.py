@@ -126,7 +126,7 @@ IDEAS: dict[str, dict[str, Any]] = {
                    "history": "Mesopotamian farmers dug canals from about 6000 BC."},
     "longhouse": {"name": "Longhouses", "era": "Farming Age", "cost": 10, "needs": ["sowing"], "try": {"wood": 2}, "near": None,
                   "skill": None, "hint": "one long roof shelters many families at once",
-                  "unlocks": "every home holds twice as many", "boost": {"housing": 2},
+                  "unlocks": "every home holds half as many again", "boost": {"housing": 1.5},
                   "history": "Neolithic longhouses in Europe were up to 45 metres long."},
     "herding": {"name": "Herding", "era": "Farming Age", "cost": 14, "needs": ["sowing"], "try": {"food": 2}, "near": None,
                 "skill": None, "hint": "young animals raised by hand stay near the people who feed them",
@@ -142,7 +142,7 @@ IDEAS: dict[str, dict[str, Any]] = {
                "history": "Bronze spread across Eurasia from about 3300 BC."},
     "writing": {"name": "Writing", "era": "Bronze Age", "cost": 40, "needs": ["bronze"], "try": {"wood": 1}, "near": None,
                 "skill": None, "hint": "marks pressed in clay remember what was owed",
-                "unlocks": "twice the Insight, and homes hold half as many again", "boost": {"insight": 2, "housing": 1.5},
+                "unlocks": "twice the Insight", "boost": {"insight": 2},
                 "history": "Sumerian tallies became writing around 3200 BC."},
     "iron": {"name": "Iron", "era": "Iron Age", "cost": 60, "needs": ["bronze"], "try": {"stone": 3, "wood": 2}, "near": "fire",
              "skill": None, "hint": "red earth gives a grey metal in a hotter fire, and it is everywhere",
@@ -154,7 +154,7 @@ IDEAS: dict[str, dict[str, Any]] = {
               "history": "Paved roads joined cities long before Rome made them famous."},
     "aqueduct": {"name": "Aqueducts", "era": "Iron Age", "cost": 80, "needs": ["masonry", "iron"], "try": {"stone": 4}, "near": "water",
                  "skill": None, "hint": "a stone channel carries clean water into the streets",
-                 "unlocks": "homes hold three times as many", "boost": {"housing": 3},
+                 "unlocks": "homes hold twice as many", "boost": {"housing": 2},
                  "history": "Clean water let ancient cities pass a hundred thousand people."},
     "steam": {"name": "Steam", "era": "Steam Age", "cost": 150, "needs": ["iron"], "try": {"wood": 4, "stone": 2}, "near": "fire",
               "skill": None, "hint": "boiling water pushes harder than any ox",
@@ -162,7 +162,7 @@ IDEAS: dict[str, dict[str, Any]] = {
               "history": "Steam engines drove the Industrial Revolution from the 1700s."},
     "steel": {"name": "Steel", "era": "Steel Age", "cost": 300, "needs": ["steam"], "try": {"stone": 4, "wood": 4}, "near": "fire",
               "skill": None, "hint": "iron blown through with air holds up towers",
-              "unlocks": "homes hold four times as many, and three times the food", "boost": {"housing": 4, "food": 3},
+              "unlocks": "homes hold twice as many, and three times the food", "boost": {"housing": 2, "food": 3},
               "history": "Steel frames made the first skyscrapers possible in the 1880s."},
     "flight": {"name": "Flight", "era": "Age of Flight", "cost": 1000, "needs": ["steel"], "try": {"wood": 4, "stone": 4}, "near": None,
                "skill": None, "hint": "a wing shaped like a bird's lifts when the wind runs over it",
@@ -178,9 +178,9 @@ FUTURE_ERAS = ERAS[3:]
 # children when it is full. Every tile they strip is a real tile.
 FOLK_HOMES = {"lean_to": 1, "hut": 4, "stone_house": 10}  # how many each building houses
 FOLK_REACH = 8                 # tiles from the store they work at first; it widens as they multiply
-FOLK_BIRTH_RATE = 0.07         # of the folk, each well-fed day there is room
+FOLK_BIRTH_RATE = 0.09         # of the folk, each well-fed day there is room
 FOLK_STARVE_SHARE = 0.25       # of those who went without food, each day
-FOLK_LARDER = {"spring": 4, "summer": 5, "autumn": 9, "winter": 3}  # days of food worth gathering for
+FOLK_LARDER = {"spring": 4, "summer": 6, "autumn": 12, "winter": 3}  # days of food worth gathering for
 FOLK_BUILDS = ("hut", "stone_house", "field", "woodlot", "fire_pit", "storehouse")
 FOLK_MILESTONES = (10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000)
 UPGRADES: dict[str, dict[str, Any]] = {
@@ -212,17 +212,17 @@ BUILDINGS: dict[str, dict[str, Any]] = {
                  "effect": "everyone recovers 1 more energy overnight"},
     "drying_rack": {"cost": {"wood": 3}, "skill": "weaving", "slots": 3, "max": 1, "food": 1,
                     "effect": "gathering food yields 1 more, and carried food stops rotting"},
-    "field": {"cost": {"wood": 2}, "skill": "farming", "slots": 2, "max": 120, "near_water": FIELD_WATER_RANGE,
+    "field": {"cost": {"wood": 2}, "skill": "farming", "slots": 2, "max": 200, "near_water": FIELD_WATER_RANGE,
               "effect": "grows grain, which keeps all winter; must be near water, and tires if never rested"},
     "woodlot": {"cost": {"wood": 2}, "skill": None, "idea": "coppicing", "slots": 2, "max": 30,
                 "effect": f"tended stumps give back 1 wood every {WOODLOT_GROW_DAYS} days"},
     "depot": {"cost": {"wood": 2}, "skill": None, "slots": 2, "max": 8,
               "effect": "a cache far from camp: store goods here instead of hauling them all the way back"},
-    "hut": {"cost": {"wood": 6, "stone": 2}, "skill": None, "slots": 4, "max": 60,
+    "hut": {"cost": {"wood": 6, "stone": 2}, "skill": None, "slots": 4, "max": 120,
             "effect": "a proper home: 2 beds for villagers and room for 4 of the folk"},
     "storehouse": {"cost": {"wood": 4, "stone": 2}, "skill": None, "idea": "pottery", "slots": 3, "max": 1,
                    "effect": f"food stops rotting for anyone sleeping within {SHELTER_RANGE} tiles"},
-    "stone_house": {"cost": {"stone": 6, "wood": 2}, "skill": None, "idea": "masonry", "slots": 5, "max": 80,
+    "stone_house": {"cost": {"stone": 6, "wood": 2}, "skill": None, "idea": "masonry", "slots": 5, "max": 200,
                     "effect": "a lasting home: 3 beds for villagers and room for 10 of the folk"},
 }
 LEVELS = ((0, "Camp"), (2, "Hamlet"), (4, "Village"))
@@ -1482,7 +1482,11 @@ def _folk_site(world: dict, name: str, reach: int) -> tuple[int, int] | None:
     if wet:
         wet += int(boost(world, "water_range"))
     for x, y in _rings(cx, cy, reach):
-        if (x, y) in taken or tile(world, x, y) != "grass":
+        if (x, y) in taken:
+            continue
+        kind = tile(world, x, y)
+        # open grass, or forest they fell to make room; a tended woodlot is left standing
+        if kind != "grass" and not (kind == "forest" and f"{x},{y}" not in world["woodlots"]):
             continue
         if wet and not _near_tile(world, x, y, "water", wet):
             continue
@@ -1518,6 +1522,11 @@ def _folk_build(world: dict, stats: dict, reach: int) -> None:
                 continue
             for k, n in spec["cost"].items():
                 store[k] -= n
+            if tile(world, *site) == "forest":  # the trees come down, and the wood is kept
+                felled = _cut_tree(world, site[0], site[1], TREE_WOOD)
+                store["wood"] = store.get("wood", 0) + felled
+                stats["wood"] += felled
+                world["changed"][f"{site[0]},{site[1]}"] = "."
             built = {"kind": name, "x": site[0], "y": site[1], "by": "the folk", "day": world["day"]}
             world["built"].append(built)
             if name in ("field", "woodlot"):
@@ -1597,6 +1606,7 @@ def _folk_day(world: dict, report: dict) -> None:
         # felled trees are not news once whole woods come down
         world["_events"] = [e for e in world.get("_events", []) if not e.startswith("The trees at")]
     _folk_build(world, stats, max(reach, FOLK_REACH + 3))
+    world["_events"] = [e for e in world.get("_events", []) if not e.startswith("The trees at")]
     if folk > 0:
         fed = 0
         for item in EDIBLE:
@@ -1617,7 +1627,7 @@ def _folk_day(world: dict, report: dict) -> None:
     if room > 0 and folk == 0:
         stats["born"] = min(room, 2)  # the first family walks in, carrying what they have
         store["food"] = store.get("food", 0) + 4
-    elif room > 0 and not stats["starved"] and _edible(store) >= folk * 2 and (stats["food"] >= folk or _edible(store) >= folk * 4):
+    elif room > 0 and not stats["starved"] and _edible(store) >= folk * (2 if season(world) in ("spring", "summer") else 6)             and (stats["food"] >= folk or _edible(store) >= folk * 4):
         # children come when the store is full and the land is giving more than is eaten
         stats["born"] = min(room, max(1, round(folk * FOLK_BIRTH_RATE)))
     folk += stats["born"]
@@ -1678,6 +1688,11 @@ def _settle_guide(world: dict, report: dict, was_winter: bool) -> None:
         guide["era"] = era(world)
         guide["insight"] += 10
         report["events"].append(f"The {guide['era']} has begun (+10 Insight)")
+    if guide.get("auto"):  # the guide has asked for ideas to be planted as they come within reach
+        ready = [(spec["cost"], key) for key, spec in IDEAS.items() if key not in guide["planted"]
+                 and all(n in guide["known"] for n in spec["needs"]) and guide["insight"] >= spec["cost"]]
+        if ready:
+            plant_idea(world, min(ready)[1])
     if guide["focus"]:
         guide["focus_start"]["hungry"] += sum(1 for e in report["villagers"] if not e["night"]["ate"])
         if world["day"] - guide["focus_start"]["day"] >= FOCUS_DAYS:
@@ -1713,6 +1728,11 @@ def buy_upgrade(world: dict, upgrade: str) -> str | None:
     for v in world["villagers"]:
         _reveal(world, v)
     return None
+
+
+def set_auto(world: dict, on: Any) -> None:
+    """Plant the cheapest idea within reach each day, so a village left alone keeps learning."""
+    world["guide"]["auto"] = bool(on)
 
 
 def set_focus(world: dict, focus: str | None) -> str | None:
@@ -2061,6 +2081,7 @@ def public_state(world: dict, now: float, have: str = "") -> dict:
         "fallen": world["fallen"],
         "max_health": max_health(world),
         "guide": {**{k: world["guide"][k] for k in ("insight", "trust", "focus", "planted", "known", "upgrades", "era", "attempts")},
+                  "auto": bool(world["guide"].get("auto")),
                   "ideas": IDEAS, "upgrades_for_sale": UPGRADES, "focuses": FOCUSES, "future_eras": FUTURE_ERAS,
                   "trust_heeded": TRUST_HEEDED, "focus_days": FOCUS_DAYS},
         "dead": [{k: d[k] for k in ("name", "day", "cause", "x", "y")} for d in world["dead"]],

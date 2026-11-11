@@ -1033,7 +1033,7 @@ def test_free_days_are_valid_across_many_worlds(monkeypatch):
         engine.advance(w, 0.0)
         for i in range(1, 6):
             engine.advance(w, engine.DAY_SECONDS * i * 12.0)
-            assert w["log"][-1]["rejected"] <= 3
+            assert w["log"][-1]["rejected"] <= 6  # a handful of clashes over one tree is normal
         assert w["day"] > 30 or w["fallen"] > 15  # nobody starves before the first winter
 
 

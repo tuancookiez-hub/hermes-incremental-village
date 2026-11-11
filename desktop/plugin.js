@@ -17,6 +17,7 @@ function makeApi(ctx) {
     ack: () => call("/ack", "POST", {}),
     budget: (daily_tokens) => call("/budget", "POST", { daily_tokens }),
     plant: (idea) => call("/plant", "POST", { idea }),
+    auto: (on) => call("/auto", "POST", { on }),
     upgrade: (upgrade) => call("/upgrade", "POST", { upgrade }),
     focus: (focus) => call("/focus", "POST", { focus }),
     perk: (perk) => call("/perk", "POST", { perk }),
@@ -34518,8 +34519,8 @@ function PeopleTab({ world, live, selected, onPick, dusk }) {
   return /* @__PURE__ */ jsxs(Fragment, { children: [
     /* @__PURE__ */ jsxs("div", { style: S.mid, children: [
       /* @__PURE__ */ jsx("strong", { style: { color: C.text, fontSize: 15 }, children: alive.length }),
-      " ",
-      alive.length === 1 ? "person" : "people",
+      " named ",
+      alive.length === 1 ? "villager" : "villagers",
       hungry > 0 && /* @__PURE__ */ jsxs("span", { style: { color: C.red }, children: [
         " \xB7 ",
         hungry,
@@ -34528,6 +34529,12 @@ function PeopleTab({ world, live, selected, onPick, dusk }) {
     ] }),
     alive.length > 0 && /* @__PURE__ */ jsx("div", { style: S.low, children: Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(" \xB7 ") }),
     /* @__PURE__ */ jsx("div", { style: S.low, children: "Each follows a way of life for free. A council lets them rethink it." }),
+    (world?.folk ?? 0) > 0 && /* @__PURE__ */ jsxs("div", { style: S.mid, children: [
+      /* @__PURE__ */ jsx("strong", { style: { color: C.text }, children: big(world.folk) }),
+      " folk live and work around them, in homes for ",
+      big(world.homes),
+      "."
+    ] }),
     /* @__PURE__ */ jsx("div", { style: S.h, children: "Villagers" }),
     everyone.map((v) => /* @__PURE__ */ jsx(
       Person,
@@ -34553,31 +34560,98 @@ function Item({ title, note, tip, children }) {
     note && /* @__PURE__ */ jsx("div", { style: S.low, children: note })
   ] });
 }
-function IdeasTab({ guide, idle, run, api }) {
+var big = (n) => {
+  n = Number(n) || 0;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M`;
+  if (n >= 1e4) return `${(n / 1e3).toFixed(n >= 1e5 ? 0 : 1)}k`;
+  return Math.round(n).toLocaleString("en-US");
+};
+var NODE_W = 132;
+var NODE_H = 62;
+var TREE_W = 600;
+function treeLayout(ideas, eras) {
+  const rows = eras.map((era) => Object.keys(ideas).filter((k) => ideas[k].era === era)).filter((r) => r.length);
+  const at = {};
+  let y = 0;
+  const bands = [];
+  rows.forEach((row) => {
+    const lines = Math.ceil(row.length / 4);
+    bands.push({ era: ideas[row[0]].era, y });
+    y += 22;
+    for (let l = 0; l < lines; l++) {
+      const part2 = row.slice(l * 4, l * 4 + 4);
+      const gap = (TREE_W - part2.length * NODE_W) / (part2.length + 1);
+      part2.forEach((k, i) => {
+        at[k] = { x: gap + i * (NODE_W + gap), y };
+      });
+      y += NODE_H + 26;
+    }
+  });
+  return { at, bands, height: y };
+}
+function IdeasTab({ guide, idle, run, api, eras }) {
+  const { at, bands, height } = useMemo(() => treeLayout(guide.ideas, eras ?? []), [guide.ideas, eras]);
+  const boosts = (idea) => Object.entries(idea.boost ?? {}).filter(([k]) => k !== "fish" && k !== "water_range").map(([k, n]) => `\xD7${n} ${k}`).join(" \xB7 ");
   return /* @__PURE__ */ jsxs(Fragment, { children: [
-    Object.entries(guide.ideas).map(([key, idea]) => {
-      const known = guide.known.includes(key);
-      const planted = guide.planted.includes(key);
-      const ready = idea.needs.every((n) => guide.known.includes(n));
-      const tries = guide.attempts?.[key] ?? 0;
-      return /* @__PURE__ */ jsxs(Item, { title: idea.name, note: `Unlocks ${idea.unlocks}`, tip: idea.history, children: [
-        known && /* @__PURE__ */ jsx("span", { style: { ...S.low, color: C.green }, children: "Known" }),
-        !known && planted && /* @__PURE__ */ jsxs("span", { style: S.low, children: [
-          "Being tried",
-          tries ? ` \xB7 ${tries} failed` : ""
-        ] }),
-        !known && !planted && (ready ? /* @__PURE__ */ jsxs(Btn, { disabled: idle || guide.insight < idea.cost, onClick: () => void run("plant", () => api.plant(key)), children: [
-          "Plant \xB7 ",
-          idea.cost
-        ] }) : /* @__PURE__ */ jsxs("span", { style: S.low, children: [
-          "After ",
-          idea.needs.map((n) => guide.ideas[n].name).join(", ")
-        ] }))
-      ] }, key);
-    }),
-    /* @__PURE__ */ jsxs("div", { style: S.low, children: [
-      "Still ahead: ",
-      guide.future_eras.join(" \u2192 ")
+    /* @__PURE__ */ jsxs("div", { style: { ...S.row, justifyContent: "space-between" }, children: [
+      /* @__PURE__ */ jsx("span", { style: S.low, children: "Plant an idea with Insight. They still have to work it out, and each one changes what the whole village can do." }),
+      /* @__PURE__ */ jsx(Btn, { on: guide.auto, disabled: idle, title: "Plant the cheapest idea within reach each day, even while you are away", onClick: () => void run("auto", () => api.auto(!guide.auto)), children: guide.auto ? "Auto on" : "Auto off" })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { style: { position: "relative", width: TREE_W, height, flexShrink: 0 }, children: [
+      /* @__PURE__ */ jsx("svg", { width: TREE_W, height, style: { position: "absolute", inset: 0, pointerEvents: "none" }, children: Object.entries(guide.ideas).flatMap(([key, idea]) => idea.needs.filter((n) => at[n] && at[key]).map((n) => {
+        const x1 = at[n].x + NODE_W / 2, y1 = at[n].y + NODE_H, x2 = at[key].x + NODE_W / 2, y2 = at[key].y;
+        const lit = guide.known.includes(n);
+        return /* @__PURE__ */ jsx("path", { d: `M${x1},${y1} C${x1},${y1 + 18} ${x2},${y2 - 18} ${x2},${y2}`, fill: "none", stroke: lit ? C.gold : C.line, strokeWidth: lit ? 2 : 1.5, opacity: lit ? 0.9 : 1 }, `${n}-${key}`);
+      })) }),
+      bands.map((b) => /* @__PURE__ */ jsx("div", { style: { ...S.h, position: "absolute", left: 0, top: b.y, color: b.era === guide.era ? C.gold : C.low }, children: b.era }, b.era)),
+      Object.entries(guide.ideas).map(([key, idea]) => {
+        const known = guide.known.includes(key);
+        const planted = guide.planted.includes(key);
+        const ready = idea.needs.every((n) => guide.known.includes(n));
+        const can = ready && !planted && guide.insight >= idea.cost;
+        const tries = guide.attempts?.[key] ?? 0;
+        return /* @__PURE__ */ jsxs(
+          "button",
+          {
+            type: "button",
+            className: "hv-card",
+            "data-selected": known ? "true" : void 0,
+            disabled: idle || !can,
+            title: `${idea.hint}. ${idea.history}`,
+            onClick: () => void run("plant", () => api.plant(key)),
+            style: {
+              position: "absolute",
+              left: at[key].x,
+              top: at[key].y,
+              width: NODE_W,
+              height: NODE_H,
+              boxSizing: "border-box",
+              padding: "5px 7px",
+              textAlign: "left",
+              font: "inherit",
+              color: C.text,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderStyle: "solid",
+              borderColor: known ? C.gold : can ? C.text : C.line,
+              background: known ? "rgba(230, 180, 80, 0.16)" : C.raised,
+              opacity: known || planted || ready ? 1 : 0.5,
+              cursor: can ? "pointer" : "default",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between"
+            },
+            children: [
+              /* @__PURE__ */ jsxs("span", { style: { ...S.row, justifyContent: "space-between", gap: 4 }, children: [
+                /* @__PURE__ */ jsx("strong", { style: { ...S.clip, fontSize: 12 }, children: idea.name }),
+                /* @__PURE__ */ jsx("span", { style: { fontSize: 11, color: known ? C.green : planted ? C.gold : can ? C.gold : C.low, whiteSpace: "nowrap" }, children: known ? "\u2713" : planted ? `trying${tries ? ` ${tries}` : ""}` : idea.cost })
+              ] }),
+              /* @__PURE__ */ jsx("span", { style: { fontSize: 10.5, lineHeight: 1.2, color: C.mid, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }, children: boosts(idea) || idea.unlocks })
+            ]
+          },
+          key
+        );
+      })
     ] })
   ] });
 }
@@ -34696,7 +34770,7 @@ function outlook(world) {
 function fmtItems(o) {
   return Object.entries(o ?? {}).filter(([, n]) => n > 0).map(([k, n]) => `+${n} ${k}`).join(", ");
 }
-function Resources({ res, people, world }) {
+function Resources({ res, people, world, folk }) {
   if (!res) return null;
   const ahead = outlook(world);
   const meals = people > 0 ? Math.floor(res.held.food / people) : 0;
@@ -34723,10 +34797,30 @@ function Resources({ res, people, world }) {
       meals,
       " ",
       meals === 1 ? "day" : "days"
+    ] }),
+    folk?.folk > 0 && /* @__PURE__ */ jsxs("div", { style: { fontSize: 12, marginTop: 3, color: C.mid, whiteSpace: "nowrap" }, title: "What the folk gathered yesterday, working the land around the store", children: [
+      "Folk brought ",
+      /* @__PURE__ */ jsxs("span", { style: { color: C.green }, children: [
+        "+",
+        big(folk.food)
+      ] }),
+      " food, ",
+      /* @__PURE__ */ jsxs("span", { style: { color: C.green }, children: [
+        "+",
+        big(folk.wood)
+      ] }),
+      " wood",
+      /* @__PURE__ */ jsxs("div", { children: [
+        "Homes ",
+        big(folk.folk),
+        " / ",
+        big(folk.homes),
+        folk.built?.length ? ` \xB7 built ${folk.built.length}` : ""
+      ] })
     ] })
   ] });
 }
-var TABS = [["people", "\u263A", "People"], ["ideas", "\u2726", "Ideas"], ["upgrades", "\u25B2", "Upgrades"], ["legacy", "\u25C6", "Legacy"], ["build", "\u2302", "Build"], ["speak", "\u270E", "Speak"], ["story", "\u2261", "Story"], ["settings", "\u2699", "Settings"]];
+var TABS = [["people", "\u263A", "People"], ["ideas", "\u2726", "Tree"], ["upgrades", "\u25B2", "Upgrades"], ["legacy", "\u25C6", "Legacy"], ["build", "\u2302", "Build"], ["speak", "\u270E", "Speak"], ["story", "\u2261", "Story"], ["settings", "\u2699", "Settings"]];
 var SKINS = [["ps1", "PS1 blue"], ["wood", "RPG wood"]];
 function remembered(key) {
   try {
@@ -35035,6 +35129,8 @@ function VillagePage({ ctx, skin: startSkin }) {
   const paused = !!world?.paused_at;
   const alive = (world?.villagers ?? []).filter((v) => !v.dying);
   const hungry = alive.filter((v) => v.hungry > 0).length;
+  const fs = world?.folk_stats;
+  const change = fs ? (fs.born ?? 0) - (fs.starved ?? 0) : 0;
   const affordable = guide ? Object.entries(guide.ideas).some(([k, i]) => !guide.planted.includes(k) && i.needs.every((n) => guide.known.includes(n)) && guide.insight >= i.cost) : false;
   return /* @__PURE__ */ jsxs("div", { className: "hv", "data-skin": skin, style: S.root, children: [
     /* @__PURE__ */ jsx("style", { children: SKIN_CSS }),
@@ -35052,11 +35148,16 @@ function VillagePage({ ctx, skin: startSkin }) {
         {
           type: "button",
           onClick: () => setTab((t) => t === "people" ? null : "people"),
-          title: hungry ? `${hungry} going hungry. Open People (P)` : "Open People (P)",
+          title: `${alive.length} villagers and ${(world.folk ?? 0).toLocaleString("en-US")} folk, with homes for ${(world.homes ?? 0).toLocaleString("en-US")}. Open People (P)`,
           style: { ...S.stat, background: "none", border: 0, padding: 0, color: C.text, font: "inherit", cursor: "pointer" },
           children: [
-            /* @__PURE__ */ jsx("strong", { style: { fontSize: 15, color: hungry ? C.red : C.text }, children: alive.length }),
-            /* @__PURE__ */ jsx("span", { className: "hv-w2", style: S.low, children: alive.length === 1 ? "person" : "people" })
+            /* @__PURE__ */ jsx("strong", { style: { fontSize: 19, color: hungry ? C.red : C.gold }, children: big(world.population ?? alive.length) }),
+            /* @__PURE__ */ jsx("span", { className: "hv-w2", style: S.low, children: "people" }),
+            change !== 0 && /* @__PURE__ */ jsxs("span", { className: "hv-w2", style: { fontSize: 12, color: change > 0 ? C.green : C.red }, children: [
+              change > 0 ? "+" : "",
+              big(change),
+              "/day"
+            ] })
           ]
         }
       ),
@@ -35081,7 +35182,7 @@ function VillagePage({ ctx, skin: startSkin }) {
       ] })
     ] }),
     /* @__PURE__ */ jsxs("div", { style: S.left, children: [
-      /* @__PURE__ */ jsx(Resources, { res: world?.resources, world, people: alive.length }),
+      /* @__PURE__ */ jsx(Resources, { res: world?.resources, world, people: world?.population ?? alive.length, folk: fs }),
       /* @__PURE__ */ jsxs("div", { style: S.feed, children: [
         dusk && (world?.current?.events ?? []).map((e) => /* @__PURE__ */ jsx("strong", { style: { color: DARK.test(e) ? C.red : C.gold }, children: plain(e) }, e)),
         (live?.feed ?? []).slice(0, 3).map((f, i) => /* @__PURE__ */ jsxs("div", { style: { opacity: f.ok ? 0.95 - i * 0.2 : 0.6 }, children: [
@@ -35109,14 +35210,14 @@ function VillagePage({ ctx, skin: startSkin }) {
       },
       key
     )) }),
-    tab && guide && /* @__PURE__ */ jsxs("div", { className: "hv-panel", style: S.drawer, children: [
+    tab && guide && /* @__PURE__ */ jsxs("div", { className: "hv-panel", style: { ...S.drawer, ...tab === "ideas" ? { width: TREE_W + 26 } : null }, children: [
       /* @__PURE__ */ jsxs("div", { style: { ...S.row, padding: "10px 12px 6px", justifyContent: "space-between" }, children: [
         /* @__PURE__ */ jsx("strong", { children: TABS.find((t) => t[0] === tab)[2] }),
         /* @__PURE__ */ jsx("button", { type: "button", "aria-label": "Close", onClick: () => setTab(null), style: { background: "none", border: 0, color: C.low, cursor: "pointer", font: "inherit" }, children: "\u2715" })
       ] }),
       /* @__PURE__ */ jsxs("div", { style: S.drawerBody, children: [
         tab === "people" && /* @__PURE__ */ jsx(PeopleTab, { world, live, selected, onPick: pickFromList, dusk }),
-        tab === "ideas" && /* @__PURE__ */ jsx(IdeasTab, { guide, idle, run, api }),
+        tab === "ideas" && /* @__PURE__ */ jsx(IdeasTab, { guide, idle, run, api, eras: world?.eras }),
         tab === "upgrades" && /* @__PURE__ */ jsx(UpgradesTab, { guide, idle, run, api }),
         tab === "legacy" && /* @__PURE__ */ jsx(LegacyTab, { legacy, idle, run, api }),
         tab === "build" && /* @__PURE__ */ jsx(BuildTab, { buildings: world?.buildings, built: world?.built }),
