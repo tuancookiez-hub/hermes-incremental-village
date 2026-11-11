@@ -1450,7 +1450,7 @@ def boost(world: dict, what: str) -> float:
 
 
 def population(world: dict) -> int:
-    return len(world["villagers"]) + world.get("folk", 0)
+    return len(world.get("villagers", ())) + world.get("folk", 0)
 
 
 def housing(world: dict) -> int:

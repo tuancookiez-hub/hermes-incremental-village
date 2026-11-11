@@ -65,23 +65,26 @@ def _villagers(world: Any) -> list:
     return world["villagers"] if isinstance(world, dict) and isinstance(world.get("villagers"), list) else []
 
 
+_depth = 0  # a call made from inside another call (a day's hook) must leave the land unpacked
+
+
 def _wrap(name: str):
     fn = getattr(_py, name)
 
     @wraps(fn)
     def call(*args: Any, **kwargs: Any) -> Any:
+        global _depth
         _py.CAMP = CAMP
         world = args[0] if args else None
         people = list(_villagers(world))
-        # a call made from inside another call (a day's hook) finds the land already unpacked,
-        # and must leave it that way for the call it is inside
-        outer = not any(isinstance(v.get("seen"), dict) and v["seen"] and not _packed(v) for v in people)
         for v in people:
             _unpack_seen(v)
+        _depth += 1
         try:
             out = fn(*args, **kwargs)
         finally:
-            if outer:
+            _depth -= 1
+            if _depth == 0:
                 for v in _villagers(world) + people:  # villagers can join or die during a call
                     _pack_seen(v)
         if name == "new_world":

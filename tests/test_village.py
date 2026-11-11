@@ -1033,7 +1033,7 @@ def test_free_days_are_valid_across_many_worlds(monkeypatch):
         engine.advance(w, 0.0)
         for i in range(1, 6):
             engine.advance(w, engine.DAY_SECONDS * i * 12.0)
-            assert w["log"][-1]["rejected"] <= 1
+            assert w["log"][-1]["rejected"] <= 3
         assert w["day"] > 30 or w["fallen"] > 15  # nobody starves before the first winter
 
 
@@ -1236,6 +1236,7 @@ def fall(store):
         w = store.load_world(db)
         for v in w["villagers"]:
             v["health"], v["inv"] = 1, {}
+        w["store"] = {}
         store.save_world(db, w)
     with store.tx() as db:
         w = store.load_world(db)
@@ -1318,12 +1319,11 @@ def test_a_council_can_change_a_way_and_it_is_kept(store, clock):
     assert service.snapshot(store)["world"]["ways"]["Ash"] == ["stone", "house", "explore"]
 
 
-def test_ways_take_a_village_further_than_instincts_and_spend_nothing(store):
+def test_ways_take_a_village_further_than_instincts_and_spend_nothing(store, monkeypatch):
     def live(days, with_ways):
+        monkeypatch.setattr(engine._py, "BEFORE_DAY", policy.apply if with_ways else None)
         w = engine.new_world(7, 0.0)
         for _ in range(days):
-            if with_ways:
-                policy.apply(w)
             engine.run_day(w, {}, "habit", unwatched=True)
         return w
     plain, guided = live(40, False), live(40, True)

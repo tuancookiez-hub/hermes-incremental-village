@@ -139,7 +139,7 @@ def _toward(world: dict, v: dict, goal: str, people: int, food: int, claimed: Co
 def orders(world: dict) -> dict[str, list[dict]]:
     """Today's standing orders for every villager, from their ways. The world is not changed."""
     people = len(world["villagers"])
-    packed = [v for v in world["villagers"] if engine._packed(v)]  # inside a day the land is already unpacked
+    packed = [v for v in world["villagers"] if engine._depth == 0]  # inside a day the land is already unpacked
     for v in packed:
         engine._unpack_seen(v)
     try:
