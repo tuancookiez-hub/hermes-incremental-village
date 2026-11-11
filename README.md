@@ -1,6 +1,8 @@
 # Hermes Incremental Village
 
-![A city of 4,417 people on day 173, drawn in blue ink on white paper: rows of houses and fields beside a lake](docs/images/city.jpg)
+![A city of 4,417 people on day 173, drawn as a colour print with ink outlines: rows of houses and fields beside a lake](docs/images/city.jpg)
+
+![Two villagers at camp on day 3: slim figures in long undyed robes, one dipped in indigo with a straw hat, one in madder red with a topknot](docs/images/villagers.jpg)
 
 A 3D Stone Age village whose villagers are played by Hermes. It starts with three: Ash, Bryn and Coll.
 You are their guide, not their god: you give advice, and they decide what to do.
@@ -83,7 +85,7 @@ has the approved design.
 
 | Where | How |
 |---|---|
-| Desktop | Open **Village** in the sidebar. The village fills the page: status and the population run along the top, focus, speed and the council button dock at the bottom, and People, Tree, Upgrades, Legacy, Build, Speak, Story and Settings open from the right. The look is blue ink on white paper by default; Settings has two darker looks. |
+| Desktop | Open **Village** in the sidebar. The village fills the page: status and the population run along the top, focus, speed and the council button dock at the bottom, and People, Tree, Upgrades, Legacy, Build, Speak, Story and Settings open from the right. The look is a colour print with ink outlines on white paper by default; Settings also has blue ink alone and two darker looks. |
 | Any chat | `/village` (status), `/village plan`, `/village speed <pause|1|2|4|8|16>`, `/village habit` (skip to a new free day), `/village guide <advice>`, `/village budget <tokens>`, `/village ideas`, `/village plant <idea>`, `/village upgrade <name>`, `/village focus <food\|shelter\|explore\|learn>` |
 | Agent tools | `village_status`, `village_guide`, `village_habit_day`, `village_plan_day` (toolset `village`) |
 

@@ -14789,6 +14789,122 @@ var ConeGeometry = class _ConeGeometry extends CylinderGeometry {
     return new _ConeGeometry(data.radius, data.height, data.radialSegments, data.heightSegments, data.openEnded, data.thetaStart, data.thetaLength);
   }
 };
+var LatheGeometry = class _LatheGeometry extends BufferGeometry {
+  /**
+   * Constructs a new lathe geometry.
+   *
+   * @param {Array<Vector2|Vector3>} [points] - An array of points in 2D space. The x-coordinate of each point
+   * must be greater than zero.
+   * @param {number} [segments=12] - The number of circumference segments to generate.
+   * @param {number} [phiStart=0] - The starting angle in radians.
+   * @param {number} [phiLength=Math.PI*2] - The radian (0 to 2PI) range of the lathed section 2PI is a
+   * closed lathe, less than 2PI is a portion.
+   */
+  constructor(points = [new Vector2(0, -0.5), new Vector2(0.5, 0), new Vector2(0, 0.5)], segments = 12, phiStart = 0, phiLength = Math.PI * 2) {
+    super();
+    this.type = "LatheGeometry";
+    this.parameters = {
+      points,
+      segments,
+      phiStart,
+      phiLength
+    };
+    segments = Math.floor(segments);
+    phiLength = clamp(phiLength, 0, Math.PI * 2);
+    const indices = [];
+    const vertices = [];
+    const uvs = [];
+    const initNormals = [];
+    const normals = [];
+    const inverseSegments = 1 / segments;
+    const vertex2 = new Vector3();
+    const uv = new Vector2();
+    const normal = new Vector3();
+    const curNormal = new Vector3();
+    const prevNormal = new Vector3();
+    let dx = 0;
+    let dy = 0;
+    for (let j = 0; j <= points.length - 1; j++) {
+      switch (j) {
+        case 0:
+          dx = points[j + 1].x - points[j].x;
+          dy = points[j + 1].y - points[j].y;
+          normal.x = dy * 1;
+          normal.y = -dx;
+          normal.z = dy * 0;
+          prevNormal.copy(normal);
+          normal.normalize();
+          initNormals.push(normal.x, normal.y, normal.z);
+          break;
+        case points.length - 1:
+          prevNormal.normalize();
+          initNormals.push(prevNormal.x, prevNormal.y, prevNormal.z);
+          break;
+        default:
+          dx = points[j + 1].x - points[j].x;
+          dy = points[j + 1].y - points[j].y;
+          normal.x = dy * 1;
+          normal.y = -dx;
+          normal.z = dy * 0;
+          curNormal.copy(normal);
+          normal.x += prevNormal.x;
+          normal.y += prevNormal.y;
+          normal.z += prevNormal.z;
+          normal.normalize();
+          initNormals.push(normal.x, normal.y, normal.z);
+          prevNormal.copy(curNormal);
+      }
+    }
+    for (let i = 0; i <= segments; i++) {
+      const phi = phiStart + i * inverseSegments * phiLength;
+      const sin = Math.sin(phi);
+      const cos = Math.cos(phi);
+      for (let j = 0; j <= points.length - 1; j++) {
+        vertex2.x = points[j].x * sin;
+        vertex2.y = points[j].y;
+        vertex2.z = points[j].x * cos;
+        vertices.push(vertex2.x, vertex2.y, vertex2.z);
+        uv.x = i / segments;
+        uv.y = j / (points.length - 1);
+        uvs.push(uv.x, uv.y);
+        const x = initNormals[3 * j + 0] * sin;
+        const y = initNormals[3 * j + 1];
+        const z = initNormals[3 * j + 0] * cos;
+        normals.push(x, y, z);
+      }
+    }
+    for (let i = 0; i < segments; i++) {
+      for (let j = 0; j < points.length - 1; j++) {
+        const base = j + i * points.length;
+        const a = base;
+        const b = base + points.length;
+        const c = base + points.length + 1;
+        const d = base + 1;
+        indices.push(a, b, d);
+        indices.push(c, d, b);
+      }
+    }
+    this.setIndex(indices);
+    this.setAttribute("position", new Float32BufferAttribute(vertices, 3));
+    this.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
+    this.setAttribute("normal", new Float32BufferAttribute(normals, 3));
+  }
+  copy(source) {
+    super.copy(source);
+    this.parameters = Object.assign({}, source.parameters);
+    return this;
+  }
+  /**
+   * Factory method for creating an instance of this class from the given
+   * JSON object.
+   *
+   * @param {Object} data - A JSON object representing the serialized geometry.
+   * @return {LatheGeometry} A new instance.
+   */
+  static fromJSON(data) {
+    return new _LatheGeometry(data.points, data.segments, data.phiStart, data.phiLength);
+  }
+};
 var PlaneGeometry = class _PlaneGeometry extends BufferGeometry {
   /**
    * Constructs a new plane geometry.
@@ -14950,6 +15066,86 @@ var SphereGeometry = class _SphereGeometry extends BufferGeometry {
    */
   static fromJSON(data) {
     return new _SphereGeometry(data.radius, data.widthSegments, data.heightSegments, data.phiStart, data.phiLength, data.thetaStart, data.thetaLength);
+  }
+};
+var TorusGeometry = class _TorusGeometry extends BufferGeometry {
+  /**
+   * Constructs a new torus geometry.
+   *
+   * @param {number} [radius=1] - Radius of the torus, from the center of the torus to the center of the tube.
+   * @param {number} [tube=0.4] - Radius of the tube. Must be smaller than `radius`.
+   * @param {number} [radialSegments=12] - The number of radial segments.
+   * @param {number} [tubularSegments=48] - The number of tubular segments.
+   * @param {number} [arc=Math.PI*2] - Central angle in radians.
+   * @param {number} [thetaStart=0] - Start of the tubular sweep in radians.
+   * @param {number} [thetaLength=Math.PI*2] - Length of the tubular sweep in radians.
+   */
+  constructor(radius = 1, tube = 0.4, radialSegments = 12, tubularSegments = 48, arc = Math.PI * 2, thetaStart = 0, thetaLength = Math.PI * 2) {
+    super();
+    this.type = "TorusGeometry";
+    this.parameters = {
+      radius,
+      tube,
+      radialSegments,
+      tubularSegments,
+      arc,
+      thetaStart,
+      thetaLength
+    };
+    radialSegments = Math.floor(radialSegments);
+    tubularSegments = Math.floor(tubularSegments);
+    const indices = [];
+    const vertices = [];
+    const normals = [];
+    const uvs = [];
+    const center = new Vector3();
+    const vertex2 = new Vector3();
+    const normal = new Vector3();
+    for (let j = 0; j <= radialSegments; j++) {
+      const v = thetaStart + j / radialSegments * thetaLength;
+      for (let i = 0; i <= tubularSegments; i++) {
+        const u = i / tubularSegments * arc;
+        vertex2.x = (radius + tube * Math.cos(v)) * Math.cos(u);
+        vertex2.y = (radius + tube * Math.cos(v)) * Math.sin(u);
+        vertex2.z = tube * Math.sin(v);
+        vertices.push(vertex2.x, vertex2.y, vertex2.z);
+        center.x = radius * Math.cos(u);
+        center.y = radius * Math.sin(u);
+        normal.subVectors(vertex2, center).normalize();
+        normals.push(normal.x, normal.y, normal.z);
+        uvs.push(i / tubularSegments);
+        uvs.push(j / radialSegments);
+      }
+    }
+    for (let j = 1; j <= radialSegments; j++) {
+      for (let i = 1; i <= tubularSegments; i++) {
+        const a = (tubularSegments + 1) * j + i - 1;
+        const b = (tubularSegments + 1) * (j - 1) + i - 1;
+        const c = (tubularSegments + 1) * (j - 1) + i;
+        const d = (tubularSegments + 1) * j + i;
+        indices.push(a, b, d);
+        indices.push(b, c, d);
+      }
+    }
+    this.setIndex(indices);
+    this.setAttribute("position", new Float32BufferAttribute(vertices, 3));
+    this.setAttribute("normal", new Float32BufferAttribute(normals, 3));
+    this.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
+  }
+  copy(source) {
+    super.copy(source);
+    this.parameters = Object.assign({}, source.parameters);
+    return this;
+  }
+  /**
+   * Factory method for creating an instance of this class from the given
+   * JSON object.
+   *
+   * @param {Object} data - A JSON object representing the serialized geometry.
+   * @return {TorusGeometry} A new instance.
+   */
+  static fromJSON(data) {
+    return new _TorusGeometry(data.radius, data.tube, data.radialSegments, data.tubularSegments, data.arc, data.thetaStart, data.thetaLength);
   }
 };
 function cloneUniforms(src) {
@@ -32138,10 +32334,10 @@ var FinishShader = {
     }`
 };
 var InkShader = {
-  uniforms: { tDiffuse: { value: null }, res: { value: new Vector2(1, 1) } },
+  uniforms: { tDiffuse: { value: null }, res: { value: new Vector2(1, 1) }, colour: { value: 0 } },
   vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform vec2 res; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform vec2 res; uniform float colour; varying vec2 vUv;
     float lum(vec2 uv){ return dot(texture2D(tDiffuse, uv).rgb, vec3(0.299, 0.587, 0.114)); }
     float stroke(float v, float width){ return 1.0 - smoothstep(width - 0.12, width + 0.12, abs(fract(v) - 0.5) * 2.0); }
     void main(){
@@ -32171,7 +32367,13 @@ var InkShader = {
       float h3 = step(0.93, dark);
       float shade = max(h1 * step(0.34, dark), max(h2 * step(0.62, dark), h3));
       float ink = max(edge, mix(shade, wave, wet)) * known;
-      gl_FragColor = vec4(mix(vec3(0.992, 0.992, 1.0), vec3(0.090, 0.090, 0.878), clamp(ink, 0.0, 1.0)), 1.0);
+      vec3 pen = mix(vec3(0.992, 0.992, 1.0), vec3(0.090, 0.090, 0.878), clamp(ink, 0.0, 1.0));
+      // the colour print: the picture keeps its colours, lifted so blank land is white paper, and
+      // only the outlines are inked, in a darker blue
+      float line = smoothstep(0.16, 0.42, length(vec2(gx, gy)));
+      vec3 paint = min(col * 1.1, vec3(1.0)) * vec3(0.996, 0.996, 1.0);
+      vec3 print = mix(paint, vec3(0.07, 0.08, 0.36), line * 0.82);
+      gl_FragColor = vec4(mix(pen, print, colour), 1.0);
     }`
 };
 function makePost(renderer, scene, camera, passes = [], finish = {}) {
@@ -32192,6 +32394,7 @@ function makePost(renderer, scene, camera, passes = [], finish = {}) {
   return {
     setInk(on) {
       inkPass.enabled = !!on;
+      inkPass.uniforms.colour.value = on === "print" ? 1 : 0;
       finishPass.uniforms.grain.value = on ? 0 : finish.grain ?? 0.02;
       finishPass.uniforms.vignette.value = on ? 0 : finish.vignette ?? 0.3;
     },
@@ -32419,14 +32622,19 @@ var VerticalTiltShiftShader = {
 };
 
 // src/themes/miniature.js
+var DYES = { indigo: 2375823, madder: 11680298, ochre: 13602588, celadon: 4165494, plum: 8075890, slate: 3104632 };
+var CLOTH = 15524556;
 var LOOKS = {
-  Ash: { body: 15910015, hair: 4860956, style: "sprout" },
-  Bryn: { body: 13209442, hair: 2759186, style: "buns" },
-  Coll: { body: 16180434, hair: 16052198, style: "beard" }
+  Ash: { skin: 15317386, hair: 2759702, dye: "indigo", style: "kasa" },
+  Bryn: { skin: 12155990, hair: 1840146, dye: "madder", style: "knot" },
+  Coll: { skin: 15782843, hair: 15657698, dye: "ochre", style: "elder" }
 };
 var SPARE = [
-  { body: 14268384, hair: 4861724, style: "sprout" },
-  { body: 11061647, hair: 2365970, style: "buns" }
+  { skin: 14263676, hair: 2299924, dye: "celadon", style: "long" },
+  { skin: 15781806, hair: 3810328, dye: "plum", style: "hood" },
+  { skin: 11038284, hair: 1577231, dye: "slate", style: "kasa" },
+  { skin: 15121815, hair: 4861724, dye: "madder", style: "long" },
+  { skin: 12881254, hair: 1840146, dye: "indigo", style: "knot" }
 ];
 var FOG_SIDE = 512;
 var WATER_TILE = 32;
@@ -33106,51 +33314,97 @@ ${shader.fragmentShader}`.replace("#include <dithering_fragment>", `#include <di
     if (!skinMats.has(key)) skinMats.set(key, make(color));
     return skinMats.get(key);
   };
-  const vinyl = (color) => own(new MeshPhysicalMaterial({ color, roughness: 0.48, clearcoat: 0.3, clearcoatRoughness: 0.45 }));
-  const EGG = [0.25, 0.285, 0.225];
+  const plainMat = (color) => lookMat(color, (c) => own(new MeshStandardMaterial({ color: c, roughness: 0.78 })));
+  const dipped = (geometry, dye, from, to) => {
+    const pos = geometry.attributes.position;
+    const cols = new Float32Array(pos.count * 3);
+    const cloth2 = new Color(CLOTH);
+    const deep = new Color(dye);
+    const c = new Color();
+    for (let i = 0; i < pos.count; i++) {
+      c.copy(deep).lerp(cloth2, smooth(clamp012((pos.getY(i) - from) / (to - from))));
+      cols.set([c.r, c.g, c.b], i * 3);
+    }
+    geometry.setAttribute("color", new Float32BufferAttribute(cols, 3));
+    return own(geometry);
+  };
+  const ROBE = [[0.166, 0.02], [0.16, 0.07], [0.14, 0.18], [0.112, 0.31], [0.09, 0.415], [0.096, 0.485], [0.103, 0.53], [0.084, 0.575], [0.04, 0.604], [0, 0.61]];
+  const robes = /* @__PURE__ */ new Map();
+  const robeFor = (dye) => {
+    if (!robes.has(dye)) {
+      const sleeve = new CylinderGeometry(0.03, 0.064, 0.31, 12, 5);
+      sleeve.translate(0, -0.155, 0);
+      robes.set(dye, {
+        body: dipped(new LatheGeometry(ROBE.map(([r, y]) => new Vector2(r, y)), 24), DYES[dye], 0.08, 0.36),
+        sleeve: dipped(sleeve, DYES[dye], -0.29, -0.12)
+      });
+    }
+    return robes.get(dye);
+  };
+  const sashGeo = own(new TorusGeometry(0.094, 0.017, 8, 24));
+  sashGeo.rotateX(Math.PI / 2);
+  const hatGeo = own(new ConeGeometry(0.215, 0.1, 28, 1));
+  const cloth = own(new MeshStandardMaterial({ vertexColors: true, roughness: 0.94, bumpMap: feltTex, bumpScale: 0.5 }));
   function villager(name, index) {
     const look = LOOKS[name] ?? SPARE[index % SPARE.length];
-    const skin = vinyl(look.body);
-    const hair = lookMat(look.hair, felt);
+    const skin = plainMat(look.skin);
+    const hair = plainMat(look.hair);
+    const dye = plainMat(DYES[look.dye]);
+    const robe = robeFor(look.dye);
     const group = new Group();
     const rig = new Group();
-    rig.scale.setScalar(1.32);
+    rig.scale.setScalar(1.12);
     group.add(rig);
-    const legL = pivot(rig, -0.1, 0.075, 0);
-    const legR = pivot(rig, 0.1, 0.075, 0);
-    for (const leg of [legL, legR]) part(leg, geo.bead, mat.foot, 0, -0.045, 0.03, 0.06, 0.034, 0.08);
-    part(rig, geo.egg, skin, 0, 0.32, 0, EGG[0], EGG[1], EGG[2]);
-    const armL = pivot(rig, -0.245, 0.33, 0);
-    const armR = pivot(rig, 0.245, 0.33, 0);
-    for (const arm of [armL, armR]) part(arm, geo.egg, skin, 0, -0.045, 0, 0.042, 0.066, 0.048);
-    const tool = pivot(armR, 0, -0.1, 0.02);
+    const legL = pivot(rig, -0.06, 0.2, 0);
+    const legR = pivot(rig, 0.06, 0.2, 0);
+    for (const leg of [legL, legR]) part(leg, geo.bead, mat.foot, 0, -0.172, 0.035, 0.04, 0.026, 0.062);
+    part(rig, robe.body, cloth, 0, 0, 0, 1, 1, 0.84);
+    part(rig, sashGeo, dye, 0, 0.42, 0, 1, 1, 0.84);
+    const armL = pivot(rig, -0.11, 0.538, 0);
+    const armR = pivot(rig, 0.11, 0.538, 0);
+    const sleeves = [armL, armR].map((arm, i) => {
+      const sleeve = pivot(arm, 0, 0, 0);
+      sleeve.rotation.z = (i ? 1 : -1) * 0.2;
+      part(sleeve, robe.sleeve, cloth, 0, 0, 0, 0.72, 1, 1);
+      part(sleeve, geo.bead, skin, 0, -0.323, 6e-3, 0.026);
+      return sleeve;
+    });
+    const tool = pivot(sleeves[1], 0, -0.31, 0.02);
     part(tool, geo.stick, mat.wood, 0, -0.02, 0.03, 0.016, 0.22, 0.016);
     part(tool, geo.pebble, mat.stone, 0, -0.13, 0.055, 0.044, 0.036, 0.07);
     tool.visible = false;
-    const head = pivot(rig, 0, 0.32, 0);
+    const head = pivot(rig, 0, 0.705, 0);
+    part(head, geo.egg, skin, 0, 0, 0, 0.097, 0.102, 0.095);
     for (const sx of [-1, 1]) {
-      const eye = part(head, geo.egg, mat.eyeGloss, sx * 0.09, 0.055, 0.195, 0.034, 0.05, 0.024);
-      eye.rotation.y = sx * 0.42;
-      part(head, geo.bead, mat.spark, sx * 0.09 + 0.012, 0.074, 0.216, 0.011);
-      const cheek = part(head, geo.bead, mat.cheek, sx * 0.152, 8e-3, 0.172, 0.04, 0.026, 0.014);
-      cheek.rotation.y = sx * 0.72;
+      const eye = part(head, geo.egg, mat.eyeGloss, sx * 0.037, 2e-3, 0.087, 0.0115, 0.018, 8e-3);
+      eye.rotation.y = sx * 0.4;
     }
-    if (look.style === "sprout") {
-      for (const r of [-0.42, 0, 0.42]) {
-        const t = part(head, geo.tuft, hair, r * 0.05, 0.275, 0, 0.026, 0.1, 0.026);
-        t.rotation.z = -r;
-      }
-    } else if (look.style === "buns") {
-      for (const sx of [-1, 1]) part(head, geo.blob, hair, sx * 0.13, 0.26, -0.01, 0.066);
-      part(head, geo.egg, hair, 0, 0.21, -0.075, 0.17, 0.09, 0.15);
+    if (look.style !== "hood") part(head, geo.egg, hair, 0, 0.024, -0.016, 0.103, 0.098, 0.102);
+    if (look.style === "kasa") {
+      const hat = part(head, hatGeo, mat.thatch, 0, 0.118, -0.012);
+      hat.rotation.x = -0.16;
+      part(head, geo.bead, mat.thatchB, 0, 0.172, -0.02, 0.02, 0.012, 0.02);
+      part(head, geo.egg, hair, 0, -0.07, -0.082, 0.04, 0.085, 0.03);
+    } else if (look.style === "knot") {
+      part(head, geo.bead, hair, 0, 0.138, -0.03, 0.043, 0.04, 0.043);
+      part(head, sashGeo, dye, 0, 0.108, -0.026, 0.32, 0.5, 0.38);
+      for (const sx of [-1, 1]) part(head, geo.egg, hair, sx * 0.088, -0.045, 0.02, 0.017, 0.075, 0.026);
+    } else if (look.style === "elder") {
+      const beard = part(head, geo.tuft, hair, 0, -0.04, 0.078, 0.05, 0.17, 0.034);
+      beard.rotation.x = Math.PI - 0.12;
+      part(head, geo.bead, hair, 0, 0.12, -0.05, 0.03);
+      part(sleeves[0], geo.stick, mat.darkWood, -0.02, -0.2, 0.07, 0.0125, 0.74, 0.0125);
+    } else if (look.style === "long") {
+      part(head, geo.egg, hair, 0, -0.11, -0.07, 0.082, 0.18, 0.04);
+      part(head, geo.bead, dye, 0, -0.2, -0.085, 0.022);
     } else {
-      for (const [x, y, z, r] of [[0, -0.1, 0.17, 0.09], [0.075, -0.075, 0.165, 0.062], [-0.075, -0.075, 0.165, 0.062], [0, -0.17, 0.14, 0.07]]) {
-        part(head, geo.blob, hair, x, y, z, r, r, r * 0.8);
-      }
-      part(head, geo.blob, hair, 0, 0.27, 0, 0.05);
+      part(head, geo.egg, dye, 0, 0.014, -0.022, 0.115, 0.116, 0.113);
+      const peak = part(head, geo.tuft, dye, 0, 0.1, -0.06, 0.05, 0.09, 0.05);
+      peak.rotation.x = -0.7;
+      part(head, geo.egg, hair, 0, 0.03, 0.03, 0.09, 0.07, 0.07);
     }
     const bundle = new Group();
-    bundle.position.set(0, 0.34, -0.25);
+    bundle.position.set(0, 0.46, -0.16);
     const woodPack = new Group();
     for (let i = 0; i < 3; i++) {
       const l = part(woodPack, geo.stick, i % 2 ? mat.wood : mat.darkWood, 0, -0.035 + i * 0.03, i % 2 ? 0.018 : -0.012, 0.024, 0.34, 0.024);
@@ -33173,7 +33427,7 @@ ${shader.fragmentShader}`.replace("#include <dithering_fragment>", `#include <di
       head,
       tool,
       bundle,
-      labelY: 1.1,
+      labelY: 1.2,
       setCarry(kind) {
         woodPack.visible = kind !== "stone";
         stonePack.visible = kind === "stone";
@@ -34119,6 +34373,7 @@ function createScene(container, { onPick } = {}) {
       ink = !!on;
       theme.setInk(on);
     },
+    // false, 'ink' or 'print'
     lookingAt,
     update,
     setPlayback,
@@ -34906,7 +35161,7 @@ function Resources({ res, people, world, folk }) {
   ] });
 }
 var TABS = [["people", "\u263A", "People"], ["ideas", "\u2726", "Tree"], ["upgrades", "\u25B2", "Upgrades"], ["legacy", "\u25C6", "Legacy"], ["build", "\u2302", "Build"], ["speak", "\u270E", "Speak"], ["story", "\u2261", "Story"], ["settings", "\u2699", "Settings"]];
-var SKINS = [["ink", "Blue ink"], ["ps1", "PS1 blue"], ["wood", "RPG wood"]];
+var SKINS = [["print", "Colour print"], ["ink", "Blue ink"], ["ps1", "PS1 blue"], ["wood", "RPG wood"]];
 function remembered(key) {
   try {
     return localStorage.getItem(key);
@@ -34944,9 +35199,9 @@ function Welcome({ onBegin }) {
 function savedSkin() {
   try {
     const value = localStorage.getItem("hermes-village.skin");
-    return SKINS.some(([key]) => key === value) ? value : "ink";
+    return SKINS.some(([key]) => key === value) ? value : "print";
   } catch {
-    return "ink";
+    return "print";
   }
 }
 function VillagePage({ ctx, skin: startSkin }) {
@@ -35099,7 +35354,7 @@ function VillagePage({ ctx, skin: startSkin }) {
     sceneRef.current?.select(selected);
   }, [selected]);
   useEffect(() => {
-    sceneRef.current?.setInk(skin === "ink");
+    sceneRef.current?.setInk(skin === "ink" || skin === "print" ? skin : false);
   }, [skin, world?.land_id]);
   useEffect(() => {
     if (!miniCanvas.current) return void 0;
@@ -35221,7 +35476,7 @@ function VillagePage({ ctx, skin: startSkin }) {
   const fs = world?.folk_stats;
   const change = fs ? (fs.born ?? 0) - (fs.starved ?? 0) : 0;
   const affordable = guide ? Object.entries(guide.ideas).some(([k, i]) => !guide.planted.includes(k) && i.needs.every((n) => guide.known.includes(n)) && guide.insight >= i.cost) : false;
-  return /* @__PURE__ */ jsxs("div", { className: "hv", "data-skin": skin, style: S.root, children: [
+  return /* @__PURE__ */ jsxs("div", { className: "hv", "data-skin": skin === "print" ? "ink" : skin, style: S.root, children: [
     /* @__PURE__ */ jsx("style", { children: SKIN_CSS }),
     /* @__PURE__ */ jsx("div", { ref: boxRef, style: S.canvas }),
     /* @__PURE__ */ jsxs("div", { className: "hv-panel", style: S.top, children: [

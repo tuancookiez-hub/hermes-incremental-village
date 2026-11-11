@@ -15,15 +15,22 @@ import {
   canvas, colorTexture, dataTexture, makePost
 } from './util.js'
 
-// Soft vinyl toys: one egg, big low eyes, pink cheeks. Each villager keeps a single trait so they stay simple.
+// Wayfarers, as a woodblock print would draw them: a slim figure in a long robe of undyed cloth whose
+// hem and cuffs have been dipped in one dye. The dye and one trait (a straw hat, a topknot, a beard and
+// staff, long hair, a hood) are all that tell them apart, so each reads from far above.
+const DYES = { indigo: 0x24408f, madder: 0xb23a2a, ochre: 0xcf8f1c, celadon: 0x3f8f76, plum: 0x7b3a72, slate: 0x2f5f78 }
+const CLOTH = 0xece2cc
 const LOOKS = {
-  Ash: { body: 0xf2c47f, hair: 0x4a2c1c, style: 'sprout' },
-  Bryn: { body: 0xc98f62, hair: 0x2a1a12, style: 'buns' },
-  Coll: { body: 0xf6e4d2, hair: 0xf4efe6, style: 'beard' }
+  Ash: { skin: 0xe9b98a, hair: 0x2a1c16, dye: 'indigo', style: 'kasa' },
+  Bryn: { skin: 0xb97c56, hair: 0x1c1412, dye: 'madder', style: 'knot' },
+  Coll: { skin: 0xf0d3bb, hair: 0xeeeae2, dye: 'ochre', style: 'elder' }
 }
 const SPARE = [
-  { body: 0xd9b7e0, hair: 0x4a2f1c, style: 'sprout' },
-  { body: 0xa8c98f, hair: 0x241a12, style: 'buns' }
+  { skin: 0xd9a57c, hair: 0x231814, dye: 'celadon', style: 'long' },
+  { skin: 0xf0cfae, hair: 0x3a2418, dye: 'plum', style: 'hood' },
+  { skin: 0xa86e4c, hair: 0x18110f, dye: 'slate', style: 'kasa' },
+  { skin: 0xe6bd97, hair: 0x4a2f1c, dye: 'madder', style: 'long' },
+  { skin: 0xc48d66, hair: 0x1c1412, dye: 'indigo', style: 'knot' }
 ]
 const FOG_SIDE = 512 // tiles; wider than twice the furthest chunk that can be drawn
 const WATER_TILE = 32 // the ripple pattern repeats this often, so the water can follow in steps without jumping
@@ -729,60 +736,107 @@ export function createMiniature({ renderer, scene, camera }) {
     if (!skinMats.has(key)) skinMats.set(key, make(color))
     return skinMats.get(key)
   }
-  const vinyl = color => own(new MeshPhysicalMaterial({ color, roughness: 0.48, clearcoat: 0.3, clearcoatRoughness: 0.45 }))
-  const EGG = [0.25, 0.285, 0.225]
+  const plainMat = color => lookMat(color, c => own(new MeshStandardMaterial({ color: c, roughness: 0.78 })))
+  // cloth that has been dipped: undyed above `to`, full dye below `from`
+  const dipped = (geometry, dye, from, to) => {
+    const pos = geometry.attributes.position
+    const cols = new Float32Array(pos.count * 3)
+    const cloth = new Color(CLOTH)
+    const deep = new Color(dye)
+    const c = new Color()
+    for (let i = 0; i < pos.count; i++) {
+      c.copy(deep).lerp(cloth, smooth(clamp01((pos.getY(i) - from) / (to - from))))
+      cols.set([c.r, c.g, c.b], i * 3)
+    }
+    geometry.setAttribute('color', new Float32BufferAttribute(cols, 3))
+    return own(geometry)
+  }
+  const ROBE = [[0.166, 0.02], [0.16, 0.07], [0.14, 0.18], [0.112, 0.31], [0.09, 0.415], [0.096, 0.485], [0.103, 0.53], [0.084, 0.575], [0.04, 0.604], [0, 0.61]]
+  const robes = new Map()
+  const robeFor = dye => {
+    if (!robes.has(dye)) {
+      const sleeve = new CylinderGeometry(0.03, 0.064, 0.31, 12, 5)
+      sleeve.translate(0, -0.155, 0)
+      robes.set(dye, {
+        body: dipped(new LatheGeometry(ROBE.map(([r, y]) => new Vector2(r, y)), 24), DYES[dye], 0.08, 0.36),
+        sleeve: dipped(sleeve, DYES[dye], -0.29, -0.12)
+      })
+    }
+    return robes.get(dye)
+  }
+  const sashGeo = own(new TorusGeometry(0.094, 0.017, 8, 24))
+  sashGeo.rotateX(Math.PI / 2)
+  const hatGeo = own(new ConeGeometry(0.215, 0.1, 28, 1))
+  const cloth = own(new MeshStandardMaterial({ vertexColors: true, roughness: 0.94, bumpMap: feltTex, bumpScale: 0.5 }))
 
   function villager(name, index) {
     const look = LOOKS[name] ?? SPARE[index % SPARE.length]
-    const skin = vinyl(look.body)
-    const hair = lookMat(look.hair, felt)
+    const skin = plainMat(look.skin)
+    const hair = plainMat(look.hair)
+    const dye = plainMat(DYES[look.dye])
+    const robe = robeFor(look.dye)
     const group = new Group()
     const rig = new Group()
-    rig.scale.setScalar(1.32)
+    rig.scale.setScalar(1.12)
     group.add(rig)
 
-    // tiny feet under the egg
-    const legL = pivot(rig, -0.1, 0.075, 0)
-    const legR = pivot(rig, 0.1, 0.075, 0)
-    for (const leg of [legL, legR]) part(leg, geo.bead, mat.foot, 0, -0.045, 0.03, 0.06, 0.034, 0.08)
+    // feet swing from inside the robe, so a step shows at the hem
+    const legL = pivot(rig, -0.06, 0.2, 0)
+    const legR = pivot(rig, 0.06, 0.2, 0)
+    for (const leg of [legL, legR]) part(leg, geo.bead, mat.foot, 0, -0.172, 0.035, 0.04, 0.026, 0.062)
 
-    part(rig, geo.egg, skin, 0, 0.32, 0, EGG[0], EGG[1], EGG[2])
+    part(rig, robe.body, cloth, 0, 0, 0, 1, 1, 0.84)
+    part(rig, sashGeo, dye, 0, 0.42, 0, 1, 1, 0.84)
 
-    // side nubs for arms
-    const armL = pivot(rig, -0.245, 0.33, 0)
-    const armR = pivot(rig, 0.245, 0.33, 0)
-    for (const arm of [armL, armR]) part(arm, geo.egg, skin, 0, -0.045, 0, 0.042, 0.066, 0.048)
-    const tool = pivot(armR, 0, -0.1, 0.02)
+    // long sleeves hang from the shoulders and hide the arms; only the hands show
+    const armL = pivot(rig, -0.11, 0.538, 0)
+    const armR = pivot(rig, 0.11, 0.538, 0)
+    const sleeves = [armL, armR].map((arm, i) => {
+      const sleeve = pivot(arm, 0, 0, 0)
+      sleeve.rotation.z = (i ? 1 : -1) * 0.2
+      part(sleeve, robe.sleeve, cloth, 0, 0, 0, 0.72, 1, 1)
+      part(sleeve, geo.bead, skin, 0, -0.323, 0.006, 0.026)
+      return sleeve
+    })
+    const tool = pivot(sleeves[1], 0, -0.31, 0.02)
     part(tool, geo.stick, mat.wood, 0, -0.02, 0.03, 0.016, 0.22, 0.016)
     part(tool, geo.pebble, mat.stone, 0, -0.13, 0.055, 0.044, 0.036, 0.07)
     tool.visible = false
 
-    // the face lives on a pivot inside the egg, so looking around slides it over the body
-    const head = pivot(rig, 0, 0.32, 0)
+    // a small head with two quiet eyes; everything worn on it turns with it
+    const head = pivot(rig, 0, 0.705, 0)
+    part(head, geo.egg, skin, 0, 0, 0, 0.097, 0.102, 0.095)
     for (const sx of [-1, 1]) {
-      const eye = part(head, geo.egg, mat.eyeGloss, sx * 0.09, 0.055, 0.195, 0.034, 0.05, 0.024)
-      eye.rotation.y = sx * 0.42
-      part(head, geo.bead, mat.spark, sx * 0.09 + 0.012, 0.074, 0.216, 0.011)
-      const cheek = part(head, geo.bead, mat.cheek, sx * 0.152, 0.008, 0.172, 0.04, 0.026, 0.014)
-      cheek.rotation.y = sx * 0.72
+      const eye = part(head, geo.egg, mat.eyeGloss, sx * 0.037, 0.002, 0.087, 0.0115, 0.018, 0.008)
+      eye.rotation.y = sx * 0.4
     }
-    if (look.style === 'sprout') {
-      for (const r of [-0.42, 0, 0.42]) {
-        const t = part(head, geo.tuft, hair, r * 0.05, 0.275, 0, 0.026, 0.1, 0.026)
-        t.rotation.z = -r
-      }
-    } else if (look.style === 'buns') {
-      for (const sx of [-1, 1]) part(head, geo.blob, hair, sx * 0.13, 0.26, -0.01, 0.066)
-      part(head, geo.egg, hair, 0, 0.21, -0.075, 0.17, 0.09, 0.15)
+    if (look.style !== 'hood') part(head, geo.egg, hair, 0, 0.024, -0.016, 0.103, 0.098, 0.102)
+    if (look.style === 'kasa') {
+      const hat = part(head, hatGeo, mat.thatch, 0, 0.118, -0.012)
+      hat.rotation.x = -0.16
+      part(head, geo.bead, mat.thatchB, 0, 0.172, -0.02, 0.02, 0.012, 0.02)
+      part(head, geo.egg, hair, 0, -0.07, -0.082, 0.04, 0.085, 0.03)
+    } else if (look.style === 'knot') {
+      part(head, geo.bead, hair, 0, 0.138, -0.03, 0.043, 0.04, 0.043)
+      part(head, sashGeo, dye, 0, 0.108, -0.026, 0.32, 0.5, 0.38)
+      for (const sx of [-1, 1]) part(head, geo.egg, hair, sx * 0.088, -0.045, 0.02, 0.017, 0.075, 0.026)
+    } else if (look.style === 'elder') {
+      const beard = part(head, geo.tuft, hair, 0, -0.04, 0.078, 0.05, 0.17, 0.034)
+      beard.rotation.x = Math.PI - 0.12
+      part(head, geo.bead, hair, 0, 0.12, -0.05, 0.03)
+      part(sleeves[0], geo.stick, mat.darkWood, -0.02, -0.2, 0.07, 0.0125, 0.74, 0.0125)
+    } else if (look.style === 'long') {
+      part(head, geo.egg, hair, 0, -0.11, -0.07, 0.082, 0.18, 0.04)
+      part(head, geo.bead, dye, 0, -0.2, -0.085, 0.022)
     } else {
-      for (const [x, y, z, r] of [[0, -0.1, 0.17, 0.09], [0.075, -0.075, 0.165, 0.062], [-0.075, -0.075, 0.165, 0.062], [0, -0.17, 0.14, 0.07]]) {
-        part(head, geo.blob, hair, x, y, z, r, r, r * 0.8)
-      }
-      part(head, geo.blob, hair, 0, 0.27, 0, 0.05)
+      part(head, geo.egg, dye, 0, 0.014, -0.022, 0.115, 0.116, 0.113)
+      const peak = part(head, geo.tuft, dye, 0, 0.1, -0.06, 0.05, 0.09, 0.05)
+      peak.rotation.x = -0.7
+      part(head, geo.egg, hair, 0, 0.03, 0.03, 0.09, 0.07, 0.07)
     }
 
     const bundle = new Group()
-    bundle.position.set(0, 0.34, -0.25)
+    bundle.position.set(0, 0.46, -0.16)
     const woodPack = new Group()
     for (let i = 0; i < 3; i++) {
       const l = part(woodPack, geo.stick, i % 2 ? mat.wood : mat.darkWood, 0, -0.035 + i * 0.03, i % 2 ? 0.018 : -0.012, 0.024, 0.34, 0.024)
@@ -796,7 +850,7 @@ export function createMiniature({ renderer, scene, camera }) {
     rig.add(bundle)
     shadows(group)
     return {
-      group, rig, legL, legR, armL, armR, head, tool, bundle, labelY: 1.1,
+      group, rig, legL, legR, armL, armR, head, tool, bundle, labelY: 1.2,
       setCarry(kind) {
         woodPack.visible = kind !== 'stone'
         stonePack.visible = kind === 'stone'
@@ -979,7 +1033,7 @@ export function createMiniature({ renderer, scene, camera }) {
     render: tt => post.render(tt),
     setInk: on => {
       tilt.forEach(p => { p.enabled = !on })
-      if (on) fogDark.value.setRGB(1.4, 1.4, 1.4)
+      if (on) fogDark.value.setRGB(1.4, 1.4, 1.4) // paper, in either drawn look
       else fogDark.value.setRGB(0.006, 0.008, 0.012)
       post.setInk(on)
     },

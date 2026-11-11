@@ -378,7 +378,7 @@ function Resources({ res, people, world, folk }) {
 
 const TABS = [['people', '☺', 'People'], ['ideas', '✦', 'Tree'], ['upgrades', '▲', 'Upgrades'], ['legacy', '◆', 'Legacy'], ['build', '⌂', 'Build'], ['speak', '✎', 'Speak'], ['story', '≡', 'Story'], ['settings', '⚙', 'Settings']]
 
-const SKINS = [['ink', 'Blue ink'], ['ps1', 'PS1 blue'], ['wood', 'RPG wood']]
+const SKINS = [['print', 'Colour print'], ['ink', 'Blue ink'], ['ps1', 'PS1 blue'], ['wood', 'RPG wood']]
 
 function remembered(key) {
   try { return localStorage.getItem(key) } catch { return null }
@@ -406,9 +406,9 @@ function Welcome({ onBegin }) {
 function savedSkin() {
   try {
     const value = localStorage.getItem('hermes-village.skin')
-    return SKINS.some(([key]) => key === value) ? value : 'ink'
+    return SKINS.some(([key]) => key === value) ? value : 'print'
   } catch {
-    return 'ink'
+    return 'print'
   }
 }
 
@@ -559,7 +559,7 @@ export function VillagePage({ ctx, skin: startSkin }) {
 
   useEffect(() => { if (world) sceneRef.current?.setPlayback(world, getClock) }, [world, getClock])
   useEffect(() => { selectedRef.current = selected; sceneRef.current?.select(selected) }, [selected])
-  useEffect(() => { sceneRef.current?.setInk(skin === 'ink') }, [skin, world?.land_id])
+  useEffect(() => { sceneRef.current?.setInk(skin === 'ink' || skin === 'print' ? skin : false) }, [skin, world?.land_id])
 
   useEffect(() => {
     if (!miniCanvas.current) return undefined
@@ -678,7 +678,7 @@ export function VillagePage({ ctx, skin: startSkin }) {
   const affordable = guide ? Object.entries(guide.ideas).some(([k, i]) => !guide.planted.includes(k) && i.needs.every(n => guide.known.includes(n)) && guide.insight >= i.cost) : false
 
   return (
-    <div className="hv" data-skin={skin} style={S.root}>
+    <div className="hv" data-skin={skin === 'print' ? 'ink' : skin} style={S.root}>
       <style>{SKIN_CSS}</style>
       <div ref={boxRef} style={S.canvas} />
 

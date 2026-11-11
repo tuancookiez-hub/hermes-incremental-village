@@ -334,10 +334,10 @@ const FinishShader = {
 // The ink look: the finished picture redrawn as blue pen on white paper. Tone becomes hatching,
 // edges become outlines, and land nobody has seen is left as blank paper.
 const InkShader = {
-  uniforms: { tDiffuse: { value: null }, res: { value: new Vector2(1, 1) } },
+  uniforms: { tDiffuse: { value: null }, res: { value: new Vector2(1, 1) }, colour: { value: 0 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform vec2 res; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform vec2 res; uniform float colour; varying vec2 vUv;
     float lum(vec2 uv){ return dot(texture2D(tDiffuse, uv).rgb, vec3(0.299, 0.587, 0.114)); }
     float stroke(float v, float width){ return 1.0 - smoothstep(width - 0.12, width + 0.12, abs(fract(v) - 0.5) * 2.0); }
     void main(){
@@ -367,7 +367,13 @@ const InkShader = {
       float h3 = step(0.93, dark);
       float shade = max(h1 * step(0.34, dark), max(h2 * step(0.62, dark), h3));
       float ink = max(edge, mix(shade, wave, wet)) * known;
-      gl_FragColor = vec4(mix(vec3(0.992, 0.992, 1.0), vec3(0.090, 0.090, 0.878), clamp(ink, 0.0, 1.0)), 1.0);
+      vec3 pen = mix(vec3(0.992, 0.992, 1.0), vec3(0.090, 0.090, 0.878), clamp(ink, 0.0, 1.0));
+      // the colour print: the picture keeps its colours, lifted so blank land is white paper, and
+      // only the outlines are inked, in a darker blue
+      float line = smoothstep(0.16, 0.42, length(vec2(gx, gy)));
+      vec3 paint = min(col * 1.1, vec3(1.0)) * vec3(0.996, 0.996, 1.0);
+      vec3 print = mix(paint, vec3(0.07, 0.08, 0.36), line * 0.82);
+      gl_FragColor = vec4(mix(pen, print, colour), 1.0);
     }`
 }
 
@@ -390,6 +396,7 @@ export function makePost(renderer, scene, camera, passes = [], finish = {}) {
   return {
     setInk(on) {
       inkPass.enabled = !!on
+      inkPass.uniforms.colour.value = on === 'print' ? 1 : 0
       // a pen drawing has no film grain and no dark corners, and both would be inked as noise
       finishPass.uniforms.grain.value = on ? 0 : finish.grain ?? 0.02
       finishPass.uniforms.vignette.value = on ? 0 : finish.vignette ?? 0.3
