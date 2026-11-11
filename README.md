@@ -1,10 +1,24 @@
 # Hermes Incremental Village
 
-![A village on day 101: huts, fields, fires and a storehouse beside a lake](docs/images/village.jpg)
+![A city of 4,417 people on day 173, drawn in blue ink: rows of houses and fields beside a lake](docs/images/city.jpg)
 
 A 3D Stone Age village whose villagers are played by Hermes. It starts with three: Ash, Bryn and Coll.
 You are their guide, not their god: you give advice, and they decide what to do.
 
+- **It grows, and it keeps growing.** Three castaways become a hamlet, a village, a town and a city.
+  Alongside the named villagers live the folk: everyone else, counted as a number. They live in the
+  homes that get built, work the land around the store, eat from it and have children when it is
+  full. In test worlds left completely alone, a village passes 150 people around day 150 and 5,000 to
+  10,000 by day 300.
+- **Growth uses the land up.** Every tree the folk fell and every bush they strip is a real tile. They
+  clear forest to make room for houses and fields, so the village spreads outward and what is nearby
+  runs out. Fishing and farming are what let it grow past what wild food can feed.
+- **A technology tree.** Nineteen ideas across eight eras, from fishing and the plough to steam,
+  steel and flight. You plant them with Insight; the villagers still have to work each one out.
+  Most multiply something: twice the food, twice the work, homes that hold twice as many.
+- **It plays while you are away.** Up to 200 missed days are lived through when you come back, with
+  every villager following their way of life. Turn on Auto in the tree and ideas keep being planted
+  too. None of it calls a model.
 - **The villagers only know what they can see.** Each villager's view covers 4 tiles in every
   direction, plus their own short memory and what others have told them. They cannot walk to a
   place they have never seen, and they must talk to coordinate.
@@ -24,8 +38,8 @@ You are their guide, not their god: you give advice, and they decide what to do.
   and a villager who reaches 0 dies and leaves a grave. If everyone dies while you are playing,
   the village has fallen and you start again.
 - **Needs drive progress.** Picking bushes bare can teach someone farming. Fields must be near
-  water, shelter must be near where you sleep, and a fire keeps wolves away. Huts add beds, and a
-  wanderer may join when there is a spare bed and everyone is eating well.
+  water, shelter must be near where you sleep, and a fire keeps wolves away. Huts add beds, and
+  someone from the folk steps up when a named villager is lost.
 - **Land with no edge.** Like Minecraft, a seed grows the world chunk by chunk as someone gets close, in
   every direction, with slow changes from plains to deep forest, lake country and rocky highs. A villager
   walks at most 24 tiles a day, so resources near camp run down and there is always more further out.
@@ -43,7 +57,7 @@ You are their guide, not their god: you give advice, and they decide what to do.
 - **You control the clock.** Pause, or run at 1x, 2x, 4x, 8x or 16x. Speed and pause only last while
   the page is open: 30 seconds after you leave, time returns to 1x.
 - **It keeps going while you're away.** When you come back, the days you missed are worked out
-  from the villagers' habits and you get a summary, including anyone who died. Up to 30 days count
+  from the villagers' ways and you get a summary, including anyone who died. Up to 200 days count
   per absence. Unwatched days can kill villagers, but never the last one.
 - **Each villager has a way of life, and following it is free.** A way is an ordered list of goals,
   such as fire, then wood, then shelter, then explore. Every day the game turns it into ordinary
@@ -61,14 +75,15 @@ You are their guide, not their god: you give advice, and they decide what to do.
   at once, about 1–3k tokens, never one call per villager or per action. The panel tells you
   when one is worth it.
 
-Eras after copper, relationships, and optional extras for the Three Stage, Hermes Maps
-and Screen Overlay plugins are planned but not built.
+Islands and boats, trade between settlements, relationships, and optional extras for the Three
+Stage, Hermes Maps and Screen Overlay plugins are planned but not built. `docs/population-design.md`
+has the approved design.
 
 ## Using it
 
 | Where | How |
 |---|---|
-| Desktop | Open **Village** in the sidebar. The village fills the page: status and the population run along the top, focus, speed and the council button dock at the bottom, and People, Ideas, Upgrades, Legacy, Build, Speak, Story and Settings open from the right. |
+| Desktop | Open **Village** in the sidebar. The village fills the page: status and the population run along the top, focus, speed and the council button dock at the bottom, and People, Tree, Upgrades, Legacy, Build, Speak, Story and Settings open from the right. The look is blue ink on white paper by default; Settings has two darker looks. |
 | Any chat | `/village` (status), `/village plan`, `/village speed <pause|1|2|4|8|16>`, `/village habit` (skip to a new free day), `/village guide <advice>`, `/village budget <tokens>`, `/village ideas`, `/village plant <idea>`, `/village upgrade <name>`, `/village focus <food\|shelter\|explore\|learn>` |
 | Agent tools | `village_status`, `village_guide`, `village_habit_day`, `village_plan_day` (toolset `village`) |
 
@@ -79,24 +94,10 @@ hermes plugins install tuancookiez-hub/hermes-incremental-village
 ```
 
 Then turn the plugin on under **Capabilities → Plugins** in Desktop and open **Village** in the sidebar.
-There is nothing else to set up: the rules are plain Python inside the plugin.
+There is nothing else to set up.
 
 For local development, link or copy this folder to `<HERMES_HOME>/plugins/hermes-village`, run
 `hermes plugins enable hermes-village`, and restart the gateway so the backend routes mount.
-
-### The optional Rust engine
-
-The same rules also exist in Rust, in `engine-rs/`, and the tests hold the two equal day by day. The
-plugin never downloads or builds it. If you install it yourself, the plugin uses it, which helps most
-when catching up many missed days:
-
-```bash
-cargo install --path engine-rs --locked
-```
-
-The plugin checks the engine's version, rules and protocol when it starts it. If it is missing, out of
-date or stops, the built-in Python rules carry on with the same save. `HERMES_VILLAGE_BACKEND=python`
-or `=rust` forces one.
 
 ### Rebuilding the Desktop page
 
@@ -131,10 +132,6 @@ made in the page, so nothing is downloaded.
   Councils happen only when you ask for one, and are refused inside a cron run. The Desktop page
   re-reads the state every 5 seconds, and when a day ends, only while it is open and visible; those
   reads are free.
-- **One optional child process.** Only if you have installed the Rust engine yourself, Hermes starts
-  one copy of `hermes-village-engine` per process that uses the plugin and talks to it over stdin and
-  stdout. It listens on no port, opens no network connection, reads and writes no files, and exits
-  when Hermes does. Without it, no process is started at all.
 - **Network.** None, apart from the model calls Hermes makes for a council through your configured
   provider. The plugin downloads nothing: no engine, no remote assets or scripts, and no telemetry.
 - **Data.** The village save and the token ledger live in Hermes plugin storage at
@@ -149,10 +146,8 @@ made in the page, so nothing is downloaded.
 
 ```
 plugin.yaml, __init__.py      agent half: tools, /village, "Village planner" model slot
-village/rules.json            every game constant and table
-village/pyengine.py           the rules in Python: clock, catch-up, perception, validation, replay
-village/engine.py             one set of names in front of the Python rules and the Rust engine
-village/bridge.py             starts the optional Rust engine and talks to it over a pipe
+village/pyengine.py           the rules: clock, catch-up, perception, validation, the folk, the tree
+village/engine.py             the names the rest of the plugin uses; packs seen land for saving
 village/policy.py             ways of life: turns each villager's goals into a day's standing orders
 village/planner.py            council prompt and JSON schema
 village/service.py            shared operations, token budget gate, spend ledger
@@ -160,9 +155,7 @@ village/store.py              SQLite in Hermes plugin storage
 dashboard/plugin_api.py       read/write routes for the Desktop page (never call a model)
 desktop/plugin.js             built Desktop page (do not edit; edit web/src)
 web/                          Desktop page source (React + three.js) and build
-engine-rs/                    the same rules in Rust (optional)
-tests/                        python -m pytest tests; reference_engine.py is the frozen copy of the
-                              rules that both engines are compared with
+tests/                        python -m pytest tests
 docs/population-design.md     the approved design for what comes next
 spike/                        offline models used to design the council budget and population
 ```

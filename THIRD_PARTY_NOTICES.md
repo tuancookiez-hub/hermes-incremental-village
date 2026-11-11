@@ -1,8 +1,3 @@
-Third-party software in the optional Rust engine (engine-rs), which this plugin does not bundle or
-download: serde, serde_derive, serde_json, sha2, and their dependencies, listed with exact versions
-in engine-rs/Cargo.lock. Each is available under its own MIT, Apache-2.0 or Unicode license, shown
-on its crates.io page.
-
 Third-party software bundled in desktop/plugin.js
 
 three.js r187 (npm three@0.187.0) - https://github.com/mrdoob/three.js

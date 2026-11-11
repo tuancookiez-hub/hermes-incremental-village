@@ -1347,3 +1347,84 @@ def test_nobody_scouts_in_winter():
     assert engine.season(w) == "winter"
     w["ways"] = {v["name"]: ["explore"] for v in w["villagers"]}
     assert all(acts == [] for acts in policy.orders(w).values())
+
+
+# ---------------------------------------------------------------- the folk and the technology tree
+
+def grown(days, seed=7, auto=True):
+    w = engine.new_world(seed, 0.0)
+    engine.set_auto(w, auto)
+    for _ in range(days):
+        engine.run_day(w, {}, "habit", unwatched=True)
+    return w
+
+
+def test_a_village_left_alone_becomes_a_town():
+    w = grown(170)
+    assert engine.population(w) > 150 and engine.settlement(w) in ("Town", "City", "Metropolis")
+    assert w["folk"] <= engine.housing(w)
+    assert sum(1 for b in w["built"] if b["by"] == "the folk") > 20
+    assert len(w["guide"]["known"]) >= 8  # ideas planted and worked out with nobody watching
+
+
+def test_the_folk_never_outnumber_their_homes_and_need_food():
+    w = grown(60)
+    assert w["folk"] <= engine.housing(w)
+    w["folk"] = 50
+    w["store"] = {}
+    for key in list(w["stocks"]):
+        w["stocks"][key] = 0
+    w["guide"]["known"] = []  # no fishing, no fields: nothing to eat
+    report = engine.run_day(w, {}, "habit", unwatched=True)
+    assert report["folk"]["starved"] > 0 and w["folk"] < 50
+    assert any("starved" in e for e in report["events"])
+
+
+def test_building_takes_the_forest_with_it():
+    w = engine.new_world(7, 0.0)
+    before = sum(1 for key, n in w["stocks"].items() if n > 0 and engine.tile(w, *map(int, key.split(","))) == "forest")
+    w = grown(170)
+    cx, cy = w["store_at"]
+    near = [(x, y) for x in range(cx - 6, cx + 7) for y in range(cy - 6, cy + 7)]
+    assert sum(1 for x, y in near if engine.tile(w, x, y) == "forest") < 12
+    assert before > 0 and sum(1 for b in w["built"] if abs(b["x"] - cx) <= 6 and abs(b["y"] - cy) <= 6) > 25
+
+
+def test_every_idea_can_be_reached_and_boosts_multiply():
+    for key, idea in engine.IDEAS.items():
+        assert idea["era"] in engine.ERAS and all(n in engine.IDEAS for n in idea["needs"]), key
+    w = engine.new_world(1, 0.0)
+    assert engine.boost(w, "work") == 1 and engine.era(w) == "Stone Age"
+    w["guide"]["known"] = ["copper", "wheel", "bronze"]
+    assert engine.boost(w, "work") == pytest.approx(1.5 * 1.5 * 2) and engine.era(w) == "Bronze Age"
+    w["guide"]["known"] = list(engine.IDEAS)
+    assert engine.era(w) == "Age of Flight" and engine.boost(w, "housing") == pytest.approx(1.5 * 2 * 2)
+
+
+def test_auto_plants_the_cheapest_idea_and_only_when_asked(store):
+    snap = service.auto_ideas(store, True)
+    assert snap["world"]["guide"]["auto"] is True
+    w = engine.new_world(3, 0.0)
+    w["guide"]["insight"] = 50
+    engine.run_day(w, {}, "habit", unwatched=True)
+    assert w["guide"]["planted"] == []
+    engine.set_auto(w, True)
+    engine.run_day(w, {}, "habit", unwatched=True)
+    assert len(w["guide"]["planted"]) == 1
+    assert engine.IDEAS[w["guide"]["planted"][0]]["cost"] == min(i["cost"] for i in engine.IDEAS.values() if not i["needs"])
+
+
+def test_the_page_is_told_how_the_village_is_growing(store):
+    world = service.snapshot(store)["world"]
+    for key in ("population", "folk", "homes", "eras", "boosts", "ways"):
+        assert key in world
+    assert world["population"] == len(world["villagers"]) + world["folk"]
+
+
+def test_a_long_absence_is_lived_through_with_ways(store, clock):
+    service.reset(store, 7)
+    service.auto_ideas(store, True)
+    clock.t += engine.DAY_SECONDS * 150
+    snap = service.snapshot(store)
+    assert snap["world"]["away"]["days"] == 150 and snap["budget"]["used_today"] == 0
+    assert snap["world"]["population"] > 20 and len(snap["world"]["built"]) > 15

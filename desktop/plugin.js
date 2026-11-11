@@ -32164,7 +32164,7 @@ var InkShader = {
       float pitch = max(6.0, res.y / 150.0);
       // water is drawn as a few long wave lines, never as shade
       float wet = smoothstep(0.0, 0.07, min(col.g, col.b) - col.r * 1.22) * known;
-      float wave = stroke((fc.y + sin(fc.x / (pitch * 2.2)) * pitch * 0.55) / (pitch * 2.6), 0.2);
+      float wave = stroke((fc.y + sin(fc.x / (pitch * 2.2)) * pitch * 0.55) / (pitch * 2.6), 0.14);
       float dark = 1.0 - smoothstep(0.08, 0.72, l);
       float h1 = stroke((fc.x + fc.y) / pitch, 0.50 * smoothstep(0.34, 0.70, dark));
       float h2 = stroke((fc.x - fc.y) / pitch, 0.55 * smoothstep(0.62, 0.90, dark));
@@ -34923,6 +34923,7 @@ function Welcome({ onBegin }) {
       /* @__PURE__ */ jsx("strong", { style: { color: C.text }, children: "Hold council" }),
       " makes one model call: they plan tomorrow and rethink their way of life, which they then follow for free."
     ] }),
+    /* @__PURE__ */ jsx("div", { style: S.mid, children: "Around them the folk multiply as homes and food allow, clearing the land as they go. It keeps growing while you are away." }),
     /* @__PURE__ */ jsx("div", { style: S.mid, children: "Everything is limited and winter kills. The land has no edge and starts dark, so what they need next is always further away." }),
     /* @__PURE__ */ jsx("div", { children: /* @__PURE__ */ jsx(Btn, { primary: true, onClick: onBegin, children: "Begin" }) })
   ] });

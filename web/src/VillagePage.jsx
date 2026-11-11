@@ -396,6 +396,7 @@ function Welcome({ onBegin }) {
       <div style={S.mid}><strong style={{ color: C.text }}>Focus</strong> urges them on free days, if they trust you.</div>
       <div style={S.mid}><strong style={{ color: C.text }}>Ideas</strong> cost Insight and plant a thought. They still have to work it out.</div>
       <div style={S.mid}><strong style={{ color: C.text }}>Hold council</strong> makes one model call: they plan tomorrow and rethink their way of life, which they then follow for free.</div>
+      <div style={S.mid}>Around them the folk multiply as homes and food allow, clearing the land as they go. It keeps growing while you are away.</div>
       <div style={S.mid}>Everything is limited and winter kills. The land has no edge and starts dark, so what they need next is always further away.</div>
       <div><Btn primary onClick={onBegin}>Begin</Btn></div>
     </div>

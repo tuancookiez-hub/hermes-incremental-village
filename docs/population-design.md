@@ -176,7 +176,7 @@ growth, and building no housing keeps the village at about 4.
 
 ## Engine and saves
 
-- New rules go in Rust. Population stays a few numbers per crew and per stock, so saves stay small.
+- Population stays a few numbers per crew and per stock, so saves stay small.
 - The frozen reference engine remains the check on existing rules. New worlds carry a flag; worlds
   without it behave as they do now, so the differential tests keep working. New rules get their own
   tests.

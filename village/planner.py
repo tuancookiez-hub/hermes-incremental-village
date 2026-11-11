@@ -67,7 +67,8 @@ A depot is a cheap cache anywhere; a lean_to or fire_pit can be raised at each n
 so weigh the walk against moving the camp itself, or against settling down and farming.
 In winter, sleeping more than {engine.SHELTER_RANGE} tiles from a lean_to, hut or fire_pit means freezing.
 Sleeping more than {engine.SHELTER_RANGE} tiles from a lit fire_pit risks wolves; shelter lowers the risk.
-A wanderer may join when there is a spare bed: 3 beds, plus 2 per hut, at most {engine.MAX_VILLAGERS} villagers.
+You voice only the named villagers, at most {engine.MAX_VILLAGERS}. Around them live the folk: a growing number who
+work the land near the store, build homes and fields, and follow no plan. One of them steps up when a villager dies.
 Rock never runs out, but it is heavy and may be far away. A forest tile holds {engine.TREE_WOOD} wood. Cleared forest stays bare
 unless young trees seed from a neighbouring tile, which is slow. Fields tire with every harvest and recover if rested.
 Picking bushes bare may teach someone farming. Fields (F) are harvested with gather food.
@@ -132,7 +133,8 @@ def build_input(world: dict) -> str:
     focus = f" The guide urges them to {engine.FOCUSES[g['focus']]}." if g["focus"] else ""
     known = ", ".join(engine.IDEAS[i]["name"].lower() for i in g["known"]) or "nothing yet"
     head = (f"Day {world['day']}, {now}, {left} days of it left. Camp has built: {built}. "
-            f"The village knows: {known}. Trust in the guide: {g['trust']}/100.{focus}")
+            f"The village knows: {known}. Trust in the guide: {g['trust']}/100.{focus} "
+            f"{engine.population(world):,} people live here, with homes for {engine.housing(world):,} of the folk.")
     return "\n\n".join([head, guide, *views])
 
 
