@@ -122,7 +122,9 @@ def _toward(world: dict, v: dict, goal: str, people: int, food: int, claimed: Co
         stored = sum(inv.get(goal, 0) for _, _, inv in py._stores(world))
         return None if stored >= (10 if goal == "wood" else 6) else _haul(world, v, goal, _KINDS[goal])
     if goal == "learn":
-        return None if claimed["learn"] else (py._focus_learn(world, v) or None)
+        if claimed["learn"] or not any(i not in world["guide"]["known"] for i in world["guide"]["planted"]):
+            return None
+        return py._focus_learn(world, v) or None
     if goal == "explore":
         return None if py.season(world) == "winter" else (py._scout(world, v) or None)
     if goal == "fire" and any(b["kind"] == "fire_pit" for b in world["built"])             and sum(inv.get("wood", 0) for _, _, inv in py._stores(world)) < 4:
@@ -137,7 +139,8 @@ def _toward(world: dict, v: dict, goal: str, people: int, food: int, claimed: Co
 def orders(world: dict) -> dict[str, list[dict]]:
     """Today's standing orders for every villager, from their ways. The world is not changed."""
     people = len(world["villagers"])
-    for v in world["villagers"]:
+    packed = [v for v in world["villagers"] if engine._packed(v)]  # inside a day the land is already unpacked
+    for v in packed:
         engine._unpack_seen(v)
     try:
         py.CAMP = engine.CAMP
@@ -149,7 +152,8 @@ def orders(world: dict) -> dict[str, list[dict]]:
             acts = None
             # hunger comes before any way: nobody builds on an empty stomach
             short = v["hungry"] > 0 or food < people * (6 if py.season(world) == "autumn" else 4)
-            for goal in (["food"] if short else []) + way:
+            # an idea the guide has planted is worth a day of anyone's time: it changes everything after
+            for goal in (["food"] if short else []) + ["learn"] + way:
                 acts = _toward(world, v, goal, people, food, claimed)
                 if acts:
                     claimed[goal] += 1
@@ -161,7 +165,7 @@ def orders(world: dict) -> dict[str, list[dict]]:
             out[name] = [a for a in acts if isinstance(a, dict)][:py.MAX_ACTIONS]
         return out
     finally:
-        for v in world["villagers"]:
+        for v in packed:
             engine._pack_seen(v)
 
 
@@ -177,3 +181,6 @@ def apply(world: dict) -> bool:
 
 def describe(way: list[str]) -> str:
     return ", then ".join(GOALS[g] for g in way)
+
+
+py.BEFORE_DAY = apply  # every day the village lives, watched or not, starts from its ways

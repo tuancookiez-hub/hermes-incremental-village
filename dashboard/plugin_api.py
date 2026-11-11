@@ -43,8 +43,6 @@ async def _run(fn, *args) -> Any:
         return await asyncio.to_thread(fn, _store, *args)
     except service.VillageError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from None
-    except service.engine.EngineUnavailable as exc:  # says what to install or rebuild; the page shows it
-        raise HTTPException(status_code=503, detail=str(exc)) from None
 
 
 @router.get("/state")

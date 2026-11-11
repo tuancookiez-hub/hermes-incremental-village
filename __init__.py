@@ -153,8 +153,6 @@ def register(ctx) -> None:
                     "plan holds a council (one model call, counts against the daily budget); everything else is free.")
         except service.VillageError as exc:
             return f"Village: {exc}"
-        except service.engine.EngineUnavailable as exc:
-            return f"Village: {exc}"
         except ValueError:
             return "Village: speed must be pause, 1, 2, 4, 8 or 16."
 
