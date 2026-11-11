@@ -2,7 +2,7 @@
   "name": "hermes-village",
   "label": "Village",
   "description": "Backend routes for the Hermes Incremental Village Desktop page.",
-  "version": "0.13.2",
+  "version": "0.13.3",
   "api": "plugin_api.py",
   "tab": {
     "hidden": true

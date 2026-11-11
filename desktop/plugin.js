@@ -33351,7 +33351,7 @@ ${shader.fragmentShader}`.replace("#include <dithering_fragment>", `#include <di
       tilt.forEach((p) => {
         p.enabled = !on;
       });
-      if (on) fogDark.value.setRGB(3, 3, 3);
+      if (on) fogDark.value.setRGB(1.4, 1.4, 1.4);
       else fogDark.value.setRGB(6e-3, 8e-3, 0.012);
       post.setInk(on);
     },
@@ -33436,6 +33436,7 @@ function createScene(container, { onPick } = {}) {
   let field = null;
   const buildings = /* @__PURE__ */ new Map();
   let fireSpot = null;
+  let ink = false;
   const fogChunks = /* @__PURE__ */ new Map();
   const lit = [];
   let fogRev = null;
@@ -33519,7 +33520,7 @@ function createScene(container, { onPick } = {}) {
       if (Math.hypot(x0 + CHUNK / 2 - tx, y0 + CHUNK / 2 - tz) > far) continue;
       if (rec.any) theme.showChunk(rec.cx, rec.cy);
       for (let i = 0; i < rec.level.length; i++) {
-        const goal2 = rec.vis[i] ? 1 : rec.seen[i] ? 0.6 : 0;
+        const goal2 = rec.vis[i] ? 1 : rec.seen[i] ? ink ? 0.94 : 0.6 : 0;
         rec.level[i] += (goal2 - rec.level[i]) * step;
         const y = y0 + (i >> 4);
         const x = x0 + (i & CHUNK - 1);
@@ -33776,7 +33777,6 @@ function createScene(container, { onPick } = {}) {
     update(w);
   }
   let following = false;
-  let ink = false;
   let watching = true;
   const goal = new Vector3();
   const delta = new Vector3();

@@ -78,6 +78,7 @@ export function createScene(container, { onPick } = {}) {
 
   const buildings = new Map() // "kind@x,y" -> record
   let fireSpot = null
+  let ink = false
   // ---- fog of war: unknown land is dark, explored land is dim, and what villagers can see now is clear.
   // The day is resolved in advance, so tiles it will reveal stay dark until someone actually walks there.
   const fogChunks = new Map() // "cx,cy" -> { seen, vis, level } for every tile of that chunk
@@ -163,7 +164,8 @@ export function createScene(container, { onPick } = {}) {
       if (Math.hypot(x0 + CHUNK / 2 - tx, y0 + CHUNK / 2 - tz) > far) continue
       if (rec.any) theme.showChunk(rec.cx, rec.cy)
       for (let i = 0; i < rec.level.length; i++) {
-        const goal = rec.vis[i] ? 1 : rec.seen[i] ? 0.6 : 0 // unknown land shows nothing at all
+        // unknown land shows nothing at all; in the ink look, land once seen stays drawn
+        const goal = rec.vis[i] ? 1 : rec.seen[i] ? (ink ? 0.94 : 0.6) : 0
         rec.level[i] += (goal - rec.level[i]) * step
         const y = y0 + (i >> 4)
         const x = x0 + (i & (CHUNK - 1))
@@ -411,7 +413,6 @@ export function createScene(container, { onPick } = {}) {
 
   // ---- camera follow: clicking a card focuses and follows until deselected or the user drags
   let following = false
-  let ink = false
   let watching = true // default view drifts with the group until the user takes the camera
   const goal = new Vector3()
   const delta = new Vector3()

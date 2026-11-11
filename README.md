@@ -1,6 +1,6 @@
 # Hermes Incremental Village
 
-![A city of 4,417 people on day 173, drawn in blue ink: rows of houses and fields beside a lake](docs/images/city.jpg)
+![A city of 4,417 people on day 173, drawn in blue ink on white paper: rows of houses and fields beside a lake](docs/images/city.jpg)
 
 A 3D Stone Age village whose villagers are played by Hermes. It starts with three: Ash, Bryn and Coll.
 You are their guide, not their god: you give advice, and they decide what to do.

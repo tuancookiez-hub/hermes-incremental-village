@@ -979,7 +979,7 @@ export function createMiniature({ renderer, scene, camera }) {
     render: tt => post.render(tt),
     setInk: on => {
       tilt.forEach(p => { p.enabled = !on })
-      if (on) fogDark.value.setRGB(3, 3, 3)
+      if (on) fogDark.value.setRGB(1.4, 1.4, 1.4)
       else fogDark.value.setRGB(0.006, 0.008, 0.012)
       post.setInk(on)
     },
