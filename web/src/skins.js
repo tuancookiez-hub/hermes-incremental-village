@@ -21,6 +21,23 @@ export const SKIN_CSS = `
 @container (max-width: 700px) { .hv-w2 { display: none !important; } .hv .hv-btn { padding: 5px 5px !important; font-size: 11px !important; } }
 @font-face { font-family: 'HV Play'; src: url(${playFont}) format('woff'); }
 
+.hv[data-skin="ink"] { --hv-mid: #1717e0; --hv-low: #1717e0; --hv-node: #fdfdff; background: #fdfdff !important; font-family: Georgia, 'Times New Roman', serif; }
+.hv[data-skin="ink"] .hv-panel { background: #fdfdff !important; border: 2px solid #1717e0 !important; border-radius: 10px !important; backdrop-filter: none !important; }
+.hv[data-skin="ink"] .hv-panel, .hv[data-skin="ink"] .hv-panel * { color: #1717e0 !important; text-shadow: none !important; }
+.hv[data-skin="ink"] .hv-panel svg path { stroke: #1717e0 !important; }
+.hv[data-skin="ink"] .hv-card { background: #fdfdff !important; border: 2px solid #1717e0 !important; }
+.hv[data-skin="ink"] .hv-card[data-selected="true"] { background: #1717e0 !important; }
+.hv[data-skin="ink"] .hv-card[data-selected="true"], .hv[data-skin="ink"] .hv-card[data-selected="true"] * { color: #fdfdff !important; }
+.hv[data-skin="ink"] .hv-btn { background: #fdfdff !important; border: 2px solid #1717e0 !important; border-radius: 999px !important; font-family: ui-monospace, Consolas, monospace; font-weight: 700; }
+.hv[data-skin="ink"] .hv-btn[data-on="true"], .hv[data-skin="ink"] .hv-primary { background: #1717e0 !important; }
+.hv[data-skin="ink"] .hv-btn[data-on="true"], .hv[data-skin="ink"] .hv-primary, .hv[data-skin="ink"] .hv-primary * { color: #fdfdff !important; }
+.hv[data-skin="ink"] .hv-mini { background: #1717e0 !important; }
+.hv[data-skin="ink"] .hv-mini canvas { filter: grayscale(1) brightness(1.5) contrast(1.3); mix-blend-mode: screen; }
+.hv[data-skin="ink"] .hv-feed, .hv[data-skin="ink"] .hv-feed * { color: #1717e0 !important; text-shadow: 0 0 4px #fdfdff, 0 0 4px #fdfdff !important; }
+.hv[data-skin="ink"] input, .hv[data-skin="ink"] textarea { background: #fdfdff !important; border: 2px solid #1717e0 !important; }
+.hv[data-skin="ink"] .hv-meter { background: rgba(23, 23, 224, 0.2) !important; }
+.hv[data-skin="ink"] .hv-meter > * { background: #1717e0 !important; }
+
 .hv[data-skin="wood"] { --hv-mid: #cdbb9b; --hv-low: #a08d71; font-family: ui-monospace, Consolas, monospace; }
 .hv[data-skin="wood"] .hv-panel {
   background: linear-gradient(rgba(20, 12, 8, 0.8), rgba(20, 12, 8, 0.8)), url(${woodFill}) !important;

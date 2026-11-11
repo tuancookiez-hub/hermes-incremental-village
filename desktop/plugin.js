@@ -32137,6 +32137,43 @@ var FinishShader = {
       gl_FragColor = c;
     }`
 };
+var InkShader = {
+  uniforms: { tDiffuse: { value: null }, res: { value: new Vector2(1, 1) } },
+  vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform vec2 res; varying vec2 vUv;
+    float lum(vec2 uv){ return dot(texture2D(tDiffuse, uv).rgb, vec3(0.299, 0.587, 0.114)); }
+    float stroke(float v, float width){ return 1.0 - smoothstep(width - 0.12, width + 0.12, abs(fract(v) - 0.5) * 2.0); }
+    void main(){
+      vec2 px = 1.0 / res;
+      // the scene is lit by a day that turns to night; a drawing is not, so the tone is levelled first
+      float mean = 0.0;
+      for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) mean += lum(vec2(0.2 + 0.3 * float(i), 0.2 + 0.3 * float(j)));
+      float gain = clamp(0.62 / max(mean / 9.0, 0.02), 1.0, 6.0);
+      vec3 col = texture2D(tDiffuse, vUv).rgb;
+      float raw = dot(col, vec3(0.299, 0.587, 0.114));
+      float l = clamp(raw * gain, 0.0, 1.0);
+      float known = smoothstep(0.004, 0.02, raw);
+      float tl = lum(vUv + px * vec2(-1.0, 1.0)), t = lum(vUv + px * vec2(0.0, 1.0)), tr = lum(vUv + px * vec2(1.0, 1.0));
+      float ml = lum(vUv + px * vec2(-1.0, 0.0)), mr = lum(vUv + px * vec2(1.0, 0.0));
+      float bl = lum(vUv + px * vec2(-1.0, -1.0)), b = lum(vUv + px * vec2(0.0, -1.0)), br = lum(vUv + px * vec2(1.0, -1.0));
+      float gx = (tr + 2.0 * mr + br) - (tl + 2.0 * ml + bl);
+      float gy = (tl + 2.0 * t + tr) - (bl + 2.0 * b + br);
+      float edge = smoothstep(0.09, 0.30, length(vec2(gx, gy)) * gain);
+      vec2 fc = gl_FragCoord.xy;
+      float pitch = max(6.0, res.y / 150.0);
+      // water is drawn as a few long wave lines, never as shade
+      float wet = smoothstep(0.0, 0.07, min(col.g, col.b) - col.r * 1.22) * known;
+      float wave = stroke((fc.y + sin(fc.x / (pitch * 2.2)) * pitch * 0.55) / (pitch * 2.6), 0.2);
+      float dark = 1.0 - smoothstep(0.08, 0.72, l);
+      float h1 = stroke((fc.x + fc.y) / pitch, 0.50 * smoothstep(0.34, 0.70, dark));
+      float h2 = stroke((fc.x - fc.y) / pitch, 0.55 * smoothstep(0.62, 0.90, dark));
+      float h3 = step(0.93, dark);
+      float shade = max(h1 * step(0.34, dark), max(h2 * step(0.62, dark), h3));
+      float ink = max(edge, mix(shade, wave, wet)) * known;
+      gl_FragColor = vec4(mix(vec3(0.992, 0.992, 1.0), vec3(0.090, 0.090, 0.878), clamp(ink, 0.0, 1.0)), 1.0);
+    }`
+};
 function makePost(renderer, scene, camera, passes = [], finish = {}) {
   const size = renderer.getDrawingBufferSize(new Vector2());
   const target = new WebGLRenderTarget(size.x || 1, size.y || 1, { type: HalfFloatType, samples: 4 });
@@ -32148,7 +32185,16 @@ function makePost(renderer, scene, camera, passes = [], finish = {}) {
   finishPass.uniforms.grain.value = finish.grain ?? 0.02;
   composer.addPass(finishPass);
   composer.addPass(new OutputPass());
+  const inkPass = new ShaderPass(InkShader);
+  inkPass.enabled = false;
+  inkPass.uniforms.res.value.copy(size);
+  composer.addPass(inkPass);
   return {
+    setInk(on) {
+      inkPass.enabled = !!on;
+      finishPass.uniforms.grain.value = on ? 0 : finish.grain ?? 0.02;
+      finishPass.uniforms.vignette.value = on ? 0 : finish.vignette ?? 0.3;
+    },
     render(tt = 0) {
       finishPass.uniforms.time.value = tt;
       composer.render();
@@ -32156,6 +32202,7 @@ function makePost(renderer, scene, camera, passes = [], finish = {}) {
     resize(w, h) {
       composer.setPixelRatio(renderer.getPixelRatio());
       composer.setSize(w, h);
+      inkPass.uniforms.res.value.copy(renderer.getDrawingBufferSize(new Vector2()));
     },
     dispose() {
       composer.dispose();
@@ -33297,6 +33344,12 @@ ${shader.fragmentShader}`.replace("#include <dithering_fragment>", `#include <di
     campStore,
     animal,
     render: (tt) => post.render(tt),
+    setInk: (on) => {
+      tilt.forEach((p) => {
+        p.enabled = !on;
+      });
+      post.setInk(on);
+    },
     resize(w, h) {
       post.resize(w, h);
       tilt[0].uniforms.h.value = 2.4 / w;
@@ -34052,6 +34105,7 @@ function createScene(container, { onPick } = {}) {
   return {
     watch,
     lookAt,
+    setInk: (on) => theme.setInk(on),
     lookingAt,
     update,
     setPlayback,
@@ -34121,6 +34175,23 @@ var SKIN_CSS = `
 @container (max-width: 540px) { .hv-w3 { display: none !important; } }
 @container (max-width: 700px) { .hv-w2 { display: none !important; } .hv .hv-btn { padding: 5px 5px !important; font-size: 11px !important; } }
 @font-face { font-family: 'HV Play'; src: url(${Play_Regular_default}) format('woff'); }
+
+.hv[data-skin="ink"] { --hv-mid: #1717e0; --hv-low: #1717e0; --hv-node: #fdfdff; background: #fdfdff !important; font-family: Georgia, 'Times New Roman', serif; }
+.hv[data-skin="ink"] .hv-panel { background: #fdfdff !important; border: 2px solid #1717e0 !important; border-radius: 10px !important; backdrop-filter: none !important; }
+.hv[data-skin="ink"] .hv-panel, .hv[data-skin="ink"] .hv-panel * { color: #1717e0 !important; text-shadow: none !important; }
+.hv[data-skin="ink"] .hv-panel svg path { stroke: #1717e0 !important; }
+.hv[data-skin="ink"] .hv-card { background: #fdfdff !important; border: 2px solid #1717e0 !important; }
+.hv[data-skin="ink"] .hv-card[data-selected="true"] { background: #1717e0 !important; }
+.hv[data-skin="ink"] .hv-card[data-selected="true"], .hv[data-skin="ink"] .hv-card[data-selected="true"] * { color: #fdfdff !important; }
+.hv[data-skin="ink"] .hv-btn { background: #fdfdff !important; border: 2px solid #1717e0 !important; border-radius: 999px !important; font-family: ui-monospace, Consolas, monospace; font-weight: 700; }
+.hv[data-skin="ink"] .hv-btn[data-on="true"], .hv[data-skin="ink"] .hv-primary { background: #1717e0 !important; }
+.hv[data-skin="ink"] .hv-btn[data-on="true"], .hv[data-skin="ink"] .hv-primary, .hv[data-skin="ink"] .hv-primary * { color: #fdfdff !important; }
+.hv[data-skin="ink"] .hv-mini { background: #1717e0 !important; }
+.hv[data-skin="ink"] .hv-mini canvas { filter: grayscale(1) brightness(1.5) contrast(1.3); mix-blend-mode: screen; }
+.hv[data-skin="ink"] .hv-feed, .hv[data-skin="ink"] .hv-feed * { color: #1717e0 !important; text-shadow: 0 0 4px #fdfdff, 0 0 4px #fdfdff !important; }
+.hv[data-skin="ink"] input, .hv[data-skin="ink"] textarea { background: #fdfdff !important; border: 2px solid #1717e0 !important; }
+.hv[data-skin="ink"] .hv-meter { background: rgba(23, 23, 224, 0.2) !important; }
+.hv[data-skin="ink"] .hv-meter > * { background: #1717e0 !important; }
 
 .hv[data-skin="wood"] { --hv-mid: #cdbb9b; --hv-low: #a08d71; font-family: ui-monospace, Consolas, monospace; }
 .hv[data-skin="wood"] .hv-panel {
@@ -34434,11 +34505,11 @@ function Hearts({ value, max }) {
 }
 function Meter({ value, max, color = C.gold, width = 54 }) {
   const pct = max > 0 ? Math.max(0, Math.min(100, value / max * 100)) : 0;
-  return /* @__PURE__ */ jsx("span", { style: { display: "inline-block", width, height: 4, borderRadius: 2, background: C.line, overflow: "hidden", alignSelf: "center" }, children: /* @__PURE__ */ jsx("span", { style: { display: "block", width: `${pct}%`, height: "100%", background: color } }) });
+  return /* @__PURE__ */ jsx("span", { className: "hv-meter", style: { display: "inline-block", width, height: 4, borderRadius: 2, background: C.line, overflow: "hidden", alignSelf: "center" }, children: /* @__PURE__ */ jsx("span", { style: { display: "block", width: `${pct}%`, height: "100%", background: color } }) });
 }
 function DayBar({ dayT, wf }) {
   const pct = Math.max(0, Math.min(1, dayT ?? 0)) * 100;
-  return /* @__PURE__ */ jsxs("div", { style: { position: "relative", flex: 1, minWidth: 40, height: 4, borderRadius: 2, background: C.line }, children: [
+  return /* @__PURE__ */ jsxs("div", { className: "hv-meter", style: { position: "relative", flex: 1, minWidth: 40, height: 4, borderRadius: 2, background: C.line }, children: [
     /* @__PURE__ */ jsx("div", { style: { width: `${pct}%`, height: "100%", borderRadius: 2, background: C.gold, opacity: 0.6 } }),
     /* @__PURE__ */ jsx("div", { style: { position: "absolute", left: `${wf * 100}%`, top: -2, width: 1, height: 8, background: C.low } })
   ] });
@@ -34634,7 +34705,8 @@ function IdeasTab({ guide, idle, run, api, eras }) {
               borderWidth: 1,
               borderStyle: "solid",
               borderColor: known ? C.gold : can ? C.text : C.line,
-              background: known ? "rgba(230, 180, 80, 0.16)" : C.raised,
+              background: "var(--hv-node, #10131c)",
+              zIndex: 1,
               opacity: known || planted || ready ? 1 : 0.5,
               cursor: can ? "pointer" : "default",
               display: "flex",
@@ -34821,7 +34893,7 @@ function Resources({ res, people, world, folk }) {
   ] });
 }
 var TABS = [["people", "\u263A", "People"], ["ideas", "\u2726", "Tree"], ["upgrades", "\u25B2", "Upgrades"], ["legacy", "\u25C6", "Legacy"], ["build", "\u2302", "Build"], ["speak", "\u270E", "Speak"], ["story", "\u2261", "Story"], ["settings", "\u2699", "Settings"]];
-var SKINS = [["ps1", "PS1 blue"], ["wood", "RPG wood"]];
+var SKINS = [["ink", "Blue ink"], ["ps1", "PS1 blue"], ["wood", "RPG wood"]];
 function remembered(key) {
   try {
     return localStorage.getItem(key);
@@ -34858,9 +34930,9 @@ function Welcome({ onBegin }) {
 function savedSkin() {
   try {
     const value = localStorage.getItem("hermes-village.skin");
-    return SKINS.some(([key]) => key === value) ? value : "ps1";
+    return SKINS.some(([key]) => key === value) ? value : "ink";
   } catch {
-    return "ps1";
+    return "ink";
   }
 }
 function VillagePage({ ctx, skin: startSkin }) {
@@ -35012,6 +35084,9 @@ function VillagePage({ ctx, skin: startSkin }) {
     selectedRef.current = selected;
     sceneRef.current?.select(selected);
   }, [selected]);
+  useEffect(() => {
+    sceneRef.current?.setInk(skin === "ink");
+  }, [skin, world?.land_id]);
   useEffect(() => {
     if (!miniCanvas.current) return void 0;
     const mini = createMinimap(miniCanvas.current, (x, y) => sceneRef.current?.lookAt(x, y));
@@ -35183,7 +35258,7 @@ function VillagePage({ ctx, skin: startSkin }) {
     ] }),
     /* @__PURE__ */ jsxs("div", { style: S.left, children: [
       /* @__PURE__ */ jsx(Resources, { res: world?.resources, world, people: world?.population ?? alive.length, folk: fs }),
-      /* @__PURE__ */ jsxs("div", { style: S.feed, children: [
+      /* @__PURE__ */ jsxs("div", { className: "hv-feed", style: S.feed, children: [
         dusk && (world?.current?.events ?? []).map((e) => /* @__PURE__ */ jsx("strong", { style: { color: DARK.test(e) ? C.red : C.gold }, children: plain(e) }, e)),
         (live?.feed ?? []).slice(0, 3).map((f, i) => /* @__PURE__ */ jsxs("div", { style: { opacity: f.ok ? 0.95 - i * 0.2 : 0.6 }, children: [
           /* @__PURE__ */ jsx("strong", { children: f.name }),

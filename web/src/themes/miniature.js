@@ -975,6 +975,7 @@ export function createMiniature({ renderer, scene, camera }) {
     campStore,
     animal,
     render: tt => post.render(tt),
+    setInk: on => { tilt.forEach(p => { p.enabled = !on }); post.setInk(on) },
     resize(w, h) {
       post.resize(w, h)
       tilt[0].uniforms.h.value = 2.4 / w

@@ -756,6 +756,7 @@ export function createScene(container, { onPick } = {}) {
   return {
     watch,
     lookAt,
+    setInk: on => theme.setInk(on),
     lookingAt,
     update,
     setPlayback,

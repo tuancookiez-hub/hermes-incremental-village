@@ -65,7 +65,7 @@ function Hearts({ value, max }) {
 function Meter({ value, max, color = C.gold, width = 54 }) {
   const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0
   return (
-    <span style={{ display: 'inline-block', width, height: 4, borderRadius: 2, background: C.line, overflow: 'hidden', alignSelf: 'center' }}>
+    <span className="hv-meter" style={{ display: 'inline-block', width, height: 4, borderRadius: 2, background: C.line, overflow: 'hidden', alignSelf: 'center' }}>
       <span style={{ display: 'block', width: `${pct}%`, height: '100%', background: color }} />
     </span>
   )
@@ -74,7 +74,7 @@ function Meter({ value, max, color = C.gold, width = 54 }) {
 function DayBar({ dayT, wf }) {
   const pct = Math.max(0, Math.min(1, dayT ?? 0)) * 100
   return (
-    <div style={{ position: 'relative', flex: 1, minWidth: 40, height: 4, borderRadius: 2, background: C.line }}>
+    <div className="hv-meter" style={{ position: 'relative', flex: 1, minWidth: 40, height: 4, borderRadius: 2, background: C.line }}>
       <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: C.gold, opacity: 0.6 }} />
       <div style={{ position: 'absolute', left: `${wf * 100}%`, top: -2, width: 1, height: 8, background: C.low }} />
     </div>
@@ -378,7 +378,7 @@ function Resources({ res, people, world, folk }) {
 
 const TABS = [['people', '☺', 'People'], ['ideas', '✦', 'Tree'], ['upgrades', '▲', 'Upgrades'], ['legacy', '◆', 'Legacy'], ['build', '⌂', 'Build'], ['speak', '✎', 'Speak'], ['story', '≡', 'Story'], ['settings', '⚙', 'Settings']]
 
-const SKINS = [['ps1', 'PS1 blue'], ['wood', 'RPG wood']]
+const SKINS = [['ink', 'Blue ink'], ['ps1', 'PS1 blue'], ['wood', 'RPG wood']]
 
 function remembered(key) {
   try { return localStorage.getItem(key) } catch { return null }
@@ -405,9 +405,9 @@ function Welcome({ onBegin }) {
 function savedSkin() {
   try {
     const value = localStorage.getItem('hermes-village.skin')
-    return SKINS.some(([key]) => key === value) ? value : 'ps1'
+    return SKINS.some(([key]) => key === value) ? value : 'ink'
   } catch {
-    return 'ps1'
+    return 'ink'
   }
 }
 
@@ -558,6 +558,7 @@ export function VillagePage({ ctx, skin: startSkin }) {
 
   useEffect(() => { if (world) sceneRef.current?.setPlayback(world, getClock) }, [world, getClock])
   useEffect(() => { selectedRef.current = selected; sceneRef.current?.select(selected) }, [selected])
+  useEffect(() => { sceneRef.current?.setInk(skin === 'ink') }, [skin, world?.land_id])
 
   useEffect(() => {
     if (!miniCanvas.current) return undefined
@@ -703,7 +704,7 @@ export function VillagePage({ ctx, skin: startSkin }) {
 
       <div style={S.left}>
         <Resources res={world?.resources} world={world} people={world?.population ?? alive.length} folk={fs} />
-        <div style={S.feed}>
+        <div className="hv-feed" style={S.feed}>
           {dusk && (world?.current?.events ?? []).map(e => <strong key={e} style={{ color: DARK.test(e) ? C.red : C.gold }}>{plain(e)}</strong>)}
           {(live?.feed ?? []).slice(0, 3).map((f, i) => (
             <div key={`${i}-${f.name}-${f.text}`} style={{ opacity: f.ok ? 0.95 - i * 0.2 : 0.6 }}><strong>{f.name}</strong> {f.ok ? '' : '✗ '}{feedText(f.text, world?.camp)}</div>

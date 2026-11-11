@@ -331,7 +331,47 @@ const FinishShader = {
     }`
 }
 
-/** Multisampled post stack: scene -> theme passes -> vignette and grain -> tone mapping. */
+// The ink look: the finished picture redrawn as blue pen on white paper. Tone becomes hatching,
+// edges become outlines, and land nobody has seen is left as blank paper.
+const InkShader = {
+  uniforms: { tDiffuse: { value: null }, res: { value: new Vector2(1, 1) } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform vec2 res; varying vec2 vUv;
+    float lum(vec2 uv){ return dot(texture2D(tDiffuse, uv).rgb, vec3(0.299, 0.587, 0.114)); }
+    float stroke(float v, float width){ return 1.0 - smoothstep(width - 0.12, width + 0.12, abs(fract(v) - 0.5) * 2.0); }
+    void main(){
+      vec2 px = 1.0 / res;
+      // the scene is lit by a day that turns to night; a drawing is not, so the tone is levelled first
+      float mean = 0.0;
+      for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) mean += lum(vec2(0.2 + 0.3 * float(i), 0.2 + 0.3 * float(j)));
+      float gain = clamp(0.62 / max(mean / 9.0, 0.02), 1.0, 6.0);
+      vec3 col = texture2D(tDiffuse, vUv).rgb;
+      float raw = dot(col, vec3(0.299, 0.587, 0.114));
+      float l = clamp(raw * gain, 0.0, 1.0);
+      float known = smoothstep(0.004, 0.02, raw);
+      float tl = lum(vUv + px * vec2(-1.0, 1.0)), t = lum(vUv + px * vec2(0.0, 1.0)), tr = lum(vUv + px * vec2(1.0, 1.0));
+      float ml = lum(vUv + px * vec2(-1.0, 0.0)), mr = lum(vUv + px * vec2(1.0, 0.0));
+      float bl = lum(vUv + px * vec2(-1.0, -1.0)), b = lum(vUv + px * vec2(0.0, -1.0)), br = lum(vUv + px * vec2(1.0, -1.0));
+      float gx = (tr + 2.0 * mr + br) - (tl + 2.0 * ml + bl);
+      float gy = (tl + 2.0 * t + tr) - (bl + 2.0 * b + br);
+      float edge = smoothstep(0.09, 0.30, length(vec2(gx, gy)) * gain);
+      vec2 fc = gl_FragCoord.xy;
+      float pitch = max(6.0, res.y / 150.0);
+      // water is drawn as a few long wave lines, never as shade
+      float wet = smoothstep(0.0, 0.07, min(col.g, col.b) - col.r * 1.22) * known;
+      float wave = stroke((fc.y + sin(fc.x / (pitch * 2.2)) * pitch * 0.55) / (pitch * 2.6), 0.14);
+      float dark = 1.0 - smoothstep(0.08, 0.72, l);
+      float h1 = stroke((fc.x + fc.y) / pitch, 0.50 * smoothstep(0.34, 0.70, dark));
+      float h2 = stroke((fc.x - fc.y) / pitch, 0.55 * smoothstep(0.62, 0.90, dark));
+      float h3 = step(0.93, dark);
+      float shade = max(h1 * step(0.34, dark), max(h2 * step(0.62, dark), h3));
+      float ink = max(edge, mix(shade, wave, wet)) * known;
+      gl_FragColor = vec4(mix(vec3(0.992, 0.992, 1.0), vec3(0.090, 0.090, 0.878), clamp(ink, 0.0, 1.0)), 1.0);
+    }`
+}
+
+/** Multisampled post stack: scene -> theme passes -> vignette and grain -> tone mapping -> ink, if chosen. */
 export function makePost(renderer, scene, camera, passes = [], finish = {}) {
   const size = renderer.getDrawingBufferSize(new Vector2())
   const target = new WebGLRenderTarget(size.x || 1, size.y || 1, { type: HalfFloatType, samples: 4 })
@@ -343,7 +383,17 @@ export function makePost(renderer, scene, camera, passes = [], finish = {}) {
   finishPass.uniforms.grain.value = finish.grain ?? 0.02
   composer.addPass(finishPass)
   composer.addPass(new OutputPass())
+  const inkPass = new ShaderPass(InkShader)
+  inkPass.enabled = false
+  inkPass.uniforms.res.value.copy(size)
+  composer.addPass(inkPass)
   return {
+    setInk(on) {
+      inkPass.enabled = !!on
+      // a pen drawing has no film grain and no dark corners, and both would be inked as noise
+      finishPass.uniforms.grain.value = on ? 0 : finish.grain ?? 0.02
+      finishPass.uniforms.vignette.value = on ? 0 : finish.vignette ?? 0.3
+    },
     render(tt = 0) {
       finishPass.uniforms.time.value = tt
       composer.render()
@@ -351,6 +401,7 @@ export function makePost(renderer, scene, camera, passes = [], finish = {}) {
     resize(w, h) {
       composer.setPixelRatio(renderer.getPixelRatio())
       composer.setSize(w, h)
+      inkPass.uniforms.res.value.copy(renderer.getDrawingBufferSize(new Vector2()))
     },
     dispose() {
       composer.dispose()
