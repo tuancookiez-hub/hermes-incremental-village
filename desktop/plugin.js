@@ -32522,9 +32522,11 @@ function createMiniature({ renderer, scene, camera }) {
   fogTex.needsUpdate = true;
   const fogMap = { value: fogTex };
   const fogSpan = { value: FOG_SIDE };
+  const fogDark = { value: new Color(6e-3, 8e-3, 0.012) };
   const fogInject = (shader) => {
     shader.uniforms.uHvFog = fogMap;
     shader.uniforms.uHvSpan = fogSpan;
+    shader.uniforms.uHvDark = fogDark;
     shader.vertexShader = `varying vec2 vHvFog;
 ${shader.vertexShader}`.replace("#include <project_vertex>", `#include <project_vertex>
       vec4 hvFogPos = vec4(transformed, 1.0);
@@ -32534,15 +32536,16 @@ ${shader.vertexShader}`.replace("#include <project_vertex>", `#include <project_
       vHvFog = (modelMatrix * hvFogPos).xz;`);
     shader.fragmentShader = `uniform sampler2D uHvFog;
 uniform float uHvSpan;
+uniform vec3 uHvDark;
 varying vec2 vHvFog;
 ${shader.fragmentShader}`.replace("#include <dithering_fragment>", `#include <dithering_fragment>
-      gl_FragColor.rgb = mix(vec3(0.006, 0.008, 0.012), gl_FragColor.rgb, texture2D(uHvFog, vHvFog / uHvSpan).r);`);
+      gl_FragColor.rgb = mix(uHvDark, gl_FragColor.rgb, texture2D(uHvFog, vHvFog / uHvSpan).r);`);
   };
   const own = (x) => {
     owned.add(x);
     if (x.isMeshStandardMaterial) {
       x.onBeforeCompile = fogInject;
-      x.customProgramCacheKey = () => "hermes-village-fog";
+      x.customProgramCacheKey = () => "hermes-village-fog2";
     }
     return x;
   };
@@ -33348,6 +33351,8 @@ ${shader.fragmentShader}`.replace("#include <dithering_fragment>", `#include <di
       tilt.forEach((p) => {
         p.enabled = !on;
       });
+      if (on) fogDark.value.setRGB(3, 3, 3);
+      else fogDark.value.setRGB(6e-3, 8e-3, 0.012);
       post.setInk(on);
     },
     resize(w, h) {
@@ -34012,6 +34017,10 @@ function createScene(container, { onPick } = {}) {
     const dayT = clock ? clock.dayT : 0.4;
     syncFog(dt);
     const night = theme.light(ink ? 0.4 : dayT, controls.target, camera);
+    if (ink) {
+      scene.background?.set?.(16777215);
+      scene.fog?.color?.set?.(16777215);
+    }
     theme.tick(tt, dt, camera, controls, night);
     theme.seasonLook(world?.season, dt);
     syncBuildings(world ? buildStateAt(world, slot) : [], tt, night);

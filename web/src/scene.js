@@ -661,6 +661,7 @@ export function createScene(container, { onPick } = {}) {
     syncFog(dt)
     // a pen drawing has no night: the ink look keeps a steady late-morning light
     const night = theme.light(ink ? 0.4 : dayT, controls.target, camera)
+    if (ink) { scene.background?.set?.(0xffffff); scene.fog?.color?.set?.(0xffffff) } // beyond the known land is blank paper
     theme.tick(tt, dt, camera, controls, night)
     theme.seasonLook(world?.season, dt)
 

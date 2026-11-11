@@ -131,23 +131,25 @@ export function createMiniature({ renderer, scene, camera }) {
   fogTex.needsUpdate = true
   const fogMap = { value: fogTex }
   const fogSpan = { value: FOG_SIDE }
+  const fogDark = { value: new Color(0.006, 0.008, 0.012) } // what unseen land is painted: near black, or paper in the ink look
   const fogInject = shader => {
     shader.uniforms.uHvFog = fogMap
     shader.uniforms.uHvSpan = fogSpan
+    shader.uniforms.uHvDark = fogDark
     shader.vertexShader = `varying vec2 vHvFog;\n${shader.vertexShader}`.replace('#include <project_vertex>', `#include <project_vertex>
       vec4 hvFogPos = vec4(transformed, 1.0);
       #ifdef USE_INSTANCING
         hvFogPos = instanceMatrix * hvFogPos;
       #endif
       vHvFog = (modelMatrix * hvFogPos).xz;`)
-    shader.fragmentShader = `uniform sampler2D uHvFog;\nuniform float uHvSpan;\nvarying vec2 vHvFog;\n${shader.fragmentShader}`.replace('#include <dithering_fragment>', `#include <dithering_fragment>
-      gl_FragColor.rgb = mix(vec3(0.006, 0.008, 0.012), gl_FragColor.rgb, texture2D(uHvFog, vHvFog / uHvSpan).r);`)
+    shader.fragmentShader = `uniform sampler2D uHvFog;\nuniform float uHvSpan;\nuniform vec3 uHvDark;\nvarying vec2 vHvFog;\n${shader.fragmentShader}`.replace('#include <dithering_fragment>', `#include <dithering_fragment>
+      gl_FragColor.rgb = mix(uHvDark, gl_FragColor.rgb, texture2D(uHvFog, vHvFog / uHvSpan).r);`)
   }
   const own = x => {
     owned.add(x)
     if (x.isMeshStandardMaterial) {
       x.onBeforeCompile = fogInject
-      x.customProgramCacheKey = () => 'hermes-village-fog'
+      x.customProgramCacheKey = () => 'hermes-village-fog2'
     }
     return x
   }
@@ -975,7 +977,12 @@ export function createMiniature({ renderer, scene, camera }) {
     campStore,
     animal,
     render: tt => post.render(tt),
-    setInk: on => { tilt.forEach(p => { p.enabled = !on }); post.setInk(on) },
+    setInk: on => {
+      tilt.forEach(p => { p.enabled = !on })
+      if (on) fogDark.value.setRGB(3, 3, 3)
+      else fogDark.value.setRGB(0.006, 0.008, 0.012)
+      post.setInk(on)
+    },
     resize(w, h) {
       post.resize(w, h)
       tilt[0].uniforms.h.value = 2.4 / w
